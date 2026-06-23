@@ -1,0 +1,29 @@
+# Environment — never commit API keys
+.env
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+venv/
+.venv/
+
+# Data — generated at runtime
+data/recruiter.db
+data/chroma_store/
+data/logs/
+
+# Keep sample dataset
+!data/candidates.csv
+
+# Sentence transformer cache
+.cache/
+
+# OS files
+.DS_Store
+Thumbs.db
+*:Zone.Identifier
+
+# IDE
+.vscode/
+.idea/
