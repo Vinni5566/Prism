@@ -18,8 +18,10 @@ import json
 import os
 import sys
 import uuid
+import gzip
 from datetime import datetime, date
 from typing import Any, Dict, List
+from collections import defaultdict
 
 import pandas as pd
 
@@ -27,6 +29,12 @@ from config import DATASET_PATH
 from database import init_db, upsert_candidate, count_candidates
 from embedder import embed_batch, build_candidate_profile_text
 from vector_store import add_candidates, count as vcount
+from redrob_signals import (
+    VerifyProfileIntegrity,
+    calculate_career_velocity,
+    calculate_intent_score,
+    calculate_hidden_gem_score
+)
 
 
 # ── Column name mapping ────────────────────────────────────────────────────────
@@ -194,6 +202,11 @@ def normalise_row(row: pd.Series, idx: int) -> Dict:
         "last_active":         str(_safe(mapped.get("last_active"), "")),
         "profile_completeness": float(_safe(mapped.get("profile_completeness"), 0) or 0),
         "activity_score":      float(_safe(mapped.get("activity_score"), 0) or 0),
+        "headline":            str(_safe(mapped.get("headline"), "")),
+        "summary":             str(_safe(mapped.get("summary"), "")),
+        "country":             str(_safe(mapped.get("country"), "")),
+        "current_company_size": str(_safe(mapped.get("current_company_size"), "")),
+        "current_industry":    str(_safe(mapped.get("current_industry"), "")),
         "raw_data":            row.to_dict(),
     }
 
@@ -204,6 +217,42 @@ def normalise_row(row: pd.Series, idx: int) -> Dict:
     return candidate
 
 
+def _parse_jsonl_candidate(raw: Dict) -> Dict:
+    profile = raw.get("profile", {}) or {}
+    redrob_signals = raw.get("redrob_signals", {}) or {}
+    
+    # Map fields
+    candidate = {
+        "id":                  raw.get("candidate_id"),
+        "name":                profile.get("anonymized_name", ""),
+        "email":               raw.get("email", ""),
+        "phone":               raw.get("phone", ""),
+        "location":            profile.get("location", ""),
+        "current_title":       profile.get("current_title", ""),
+        "current_company":     profile.get("current_company", ""),
+        "years_experience":    float(profile.get("years_of_experience", 0) or 0),
+        "skills":              raw.get("skills", []), # list of dicts/strings
+        "career_history":      raw.get("career_history", []),
+        "education":           raw.get("education", []),
+        "domain":              profile.get("current_industry", ""),
+        "last_active":         redrob_signals.get("last_active_date", ""),
+        "profile_completeness": float(redrob_signals.get("profile_completeness_score", 0) or 0) / 100.0,
+        "activity_score":      float(redrob_signals.get("github_activity_score", 0) or 0) / 100.0,
+        
+        # New rich fields
+        "headline":            profile.get("headline", ""),
+        "summary":             profile.get("summary", ""),
+        "country":             profile.get("country", ""),
+        "current_company_size": profile.get("current_company_size", ""),
+        "current_industry":    profile.get("current_industry", ""),
+        "certifications":      raw.get("certifications", []),
+        "languages":           raw.get("languages", []),
+        "redrob_signals":      redrob_signals,
+        "raw_data":            raw,
+    }
+    return candidate
+
+
 def ingest(dataset_path: str):
     print(f"\n{'='*60}")
     print(f"[Ingest] Starting dataset load: {dataset_path}")
@@ -211,41 +260,144 @@ def ingest(dataset_path: str):
 
     if not os.path.exists(dataset_path):
         print(f"[Ingest] ERROR — file not found: {dataset_path}")
-        print("[Ingest] Place your dataset CSV at data/candidates.csv")
+        print("[Ingest] Place your dataset at data/candidates.csv or data/candidates.jsonl.gz")
         sys.exit(1)
 
     # ── Init DB ──────────────────────────────────────────────────────────────
     init_db()
 
-    # ── Load CSV ─────────────────────────────────────────────────────────────
-    df = pd.read_csv(dataset_path, dtype=str)
-    df = df.where(pd.notna(df), None)
-    print(f"[Ingest] Loaded {len(df)} rows, columns: {list(df.columns)}\n")
+    # ── Verify Profile Integrity class ───────────────────────────────────────
+    verifier = VerifyProfileIntegrity()
+    
+    # ── Pass 1: Compute global skill frequencies ─────────────────────────────
+    print("[Ingest] Pass 1 - Computing global skill frequencies...")
+    skill_counts = defaultdict(int)
+    total_skills = 0
+    
+    is_jsonl = dataset_path.endswith('.jsonl') or dataset_path.endswith('.jsonl.gz')
+    open_func = gzip.open if dataset_path.endswith('.gz') else open
 
-    # ── Parse candidates ─────────────────────────────────────────────────────
+    if is_jsonl:
+        with open_func(dataset_path, 'rt', encoding='utf-8') as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    raw = json.loads(line)
+                    for s in raw.get('skills', []):
+                        name = s.get('name') if isinstance(s, dict) else str(s)
+                        if name:
+                            skill_counts[name.lower()] += 1
+                            total_skills += 1
+                except Exception:
+                    pass
+    else:
+        df = pd.read_csv(dataset_path, dtype=str)
+        df = df.where(pd.notna(df), None)
+        for idx, row in df.iterrows():
+            try:
+                skills = _parse_skills(_safe(row.get("skills")))
+                for name in skills:
+                    if name:
+                        skill_counts[name.lower()] += 1
+                        total_skills += 1
+            except Exception:
+                pass
+                
+    # Compute global probabilities
+    skill_probs = {k: (v / total_skills) if total_skills > 0 else 0.0 for k, v in skill_counts.items()}
+    print(f"[Ingest] Pass 1 complete. Found {len(skill_probs)} unique skills.\n")
+    sys.stdout.flush()
+
+    # ── Pass 2: Process, Validate & Extract Features ─────────────────────────
+    print("[Ingest] Pass 2 - Processing candidates and extracting features...")
     candidates = []
-    for idx, row in df.iterrows():
-        try:
-            c = normalise_row(row, idx)
-            candidates.append(c)
-        except Exception as e:
-            print(f"[Ingest] Warning — row {idx} failed: {e}")
+    dropped_count = 0
+    
+    if is_jsonl:
+        with open_func(dataset_path, 'rt', encoding='utf-8') as f:
+            for idx, line in enumerate(f):
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    raw = json.loads(line)
+                    # Verify integrity
+                    if not verifier.is_valid(raw):
+                        dropped_count += 1
+                        continue
+                        
+                    c = _parse_jsonl_candidate(raw)
+                    # Extract features
+                    career_vel = calculate_career_velocity(c['career_history'])
+                    c['max_promotion_velocity'] = career_vel.get('max_promotion_velocity', 0.0)
+                    c['avg_time_in_role_months'] = career_vel.get('avg_time_in_role_months', 0.0)
+                    c['intent_score'] = calculate_intent_score(c['redrob_signals'], c['last_active'])
+                    c['hidden_gem_score'] = calculate_hidden_gem_score(c['skills'], skill_probs)
+                    
+                    candidates.append(c)
+                except Exception as e:
+                    print(f"[Ingest] Warning — JSONL line {idx} failed: {e}")
+    else:
+        df = pd.read_csv(dataset_path, dtype=str)
+        df = df.where(pd.notna(df), None)
+        for idx, row in df.iterrows():
+            try:
+                c = normalise_row(row, idx)
+                # Verify integrity
+                if not verifier.is_valid(c):
+                    dropped_count += 1
+                    continue
+                    
+                # Extract features (limited in CSV)
+                career_vel = calculate_career_velocity(c['career_history'])
+                c['max_promotion_velocity'] = career_vel.get('max_promotion_velocity', 0.0)
+                c['avg_time_in_role_months'] = career_vel.get('avg_time_in_role_months', 0.0)
+                # mock signals
+                signals = {
+                    "recruiter_response_rate": c.get("activity_score", 0.8),
+                    "avg_response_time_hours": 24.0,
+                    "last_active_date": c.get("last_active")
+                }
+                c['intent_score'] = calculate_intent_score(signals, c['last_active'])
+                c['hidden_gem_score'] = calculate_hidden_gem_score(c['skills'], skill_probs)
+                
+                # Check for certifications, languages, redrob_signals in row
+                cert_raw = row.get("certifications")
+                c['certifications'] = _parse_skills(cert_raw) if cert_raw else []
+                lang_raw = row.get("languages")
+                c['languages'] = _parse_skills(lang_raw) if lang_raw else []
+                
+                sig_raw = row.get("redrob_signals")
+                if sig_raw and isinstance(sig_raw, str) and sig_raw.strip().startswith("{"):
+                    try:
+                        c['redrob_signals'] = json.loads(sig_raw)
+                    except:
+                        c['redrob_signals'] = signals
+                else:
+                    c['redrob_signals'] = signals
+                
+                candidates.append(c)
+            except Exception as e:
+                print(f"[Ingest] Warning — CSV row {idx} failed: {e}")
 
-    print(f"[Ingest] Parsed {len(candidates)} candidates successfully.\n")
+    print(f"[Ingest] Ingested {len(candidates)} candidates. Dropped {dropped_count} due to integrity checks.\n")
+    sys.stdout.flush()
 
     # ── Insert into SQLite ───────────────────────────────────────────────────
-    print("[Ingest] Writing to SQLite …")
+    print("[Ingest] Writing to SQLite...")
     for c in candidates:
         upsert_candidate(c)
     print(f"[Ingest] SQLite now has {count_candidates()} candidates.\n")
 
     # ── Generate embeddings ──────────────────────────────────────────────────
-    print("[Ingest] Generating embeddings (this may take a few minutes) …")
+    print("[Ingest] Generating embeddings (this may take a few minutes)...")
     profile_texts = [build_candidate_profile_text(c) for c in candidates]
     vectors = embed_batch(profile_texts)
 
     # ── Store in ChromaDB ────────────────────────────────────────────────────
-    print("\n[Ingest] Storing vectors in ChromaDB …")
+    print("\n[Ingest] Storing vectors in ChromaDB...")
     ids       = [c["id"] for c in candidates]
     metadatas = [
         {
@@ -260,8 +412,86 @@ def ingest(dataset_path: str):
 
     print(f"\n[Ingest] Vector store now has {vcount()} entries.")
     print(f"\n{'='*60}")
-    print("[Ingest] ✅ Complete! Backend is ready to rank candidates.")
+    print("[Ingest] [DONE] Complete! Backend is ready to rank candidates.")
     print(f"{'='*60}\n")
+
+
+def get_db_skill_probabilities() -> Dict[str, float]:
+    """Retrieve skill probabilities from SQLite candidate data."""
+    from database import get_conn, _safe_json
+    skill_counts = defaultdict(int)
+    total_skills = 0
+    with get_conn() as conn:
+        rows = conn.execute("SELECT skills FROM candidates WHERE skills IS NOT NULL").fetchall()
+    for r in rows:
+        skills = _safe_json(r[0])
+        if isinstance(skills, list):
+            for s in skills:
+                name = s.get('name') if isinstance(s, dict) else str(s)
+                if name:
+                    skill_counts[name.lower()] += 1
+                    total_skills += 1
+    probs = {k: (v / total_skills) if total_skills > 0 else 0.0 for k, v in skill_counts.items()}
+    return probs
+
+
+def ingest_single_candidate(cand: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Validates and processes a single candidate dictionary.
+    Computes scores, writes to SQLite, embeds, and stores in ChromaDB.
+    """
+    # 1. Ensure it has a unique ID
+    if not cand.get("id"):
+        cand["id"] = f"cand_{uuid.uuid4().hex[:10]}"
+
+    # 2. Check profile integrity
+    verifier = VerifyProfileIntegrity()
+    if not verifier.is_valid(cand):
+        raise ValueError("Candidate profile failed integrity verification (banned company, profile inflation, etc.).")
+
+    # 3. Calculate career velocity
+    career_vel = calculate_career_velocity(cand.get("career_history", []))
+    cand['max_promotion_velocity'] = career_vel.get('max_promotion_velocity', 0.0)
+    cand['avg_time_in_role_months'] = career_vel.get('avg_time_in_role_months', 0.0)
+
+    # 4. Intent signals
+    if not cand.get("last_active"):
+        cand["last_active"] = datetime.utcnow().strftime('%Y-%m-%d')
+    if not cand.get("activity_score"):
+        cand["activity_score"] = 1.0
+
+    signals = cand.get("redrob_signals") or {}
+    if not signals:
+        signals = {
+            "recruiter_response_rate": 1.0,
+            "avg_response_time_hours": 12.0,
+            "last_active_date": cand["last_active"]
+        }
+        cand["redrob_signals"] = signals
+
+    cand['intent_score'] = calculate_intent_score(signals, cand['last_active'])
+
+    # 5. Hidden gem score
+    skill_probs = get_db_skill_probabilities()
+    cand['hidden_gem_score'] = calculate_hidden_gem_score(cand.get('skills', []), skill_probs)
+
+    # 6. SQLite write
+    upsert_candidate(cand)
+
+    # 7. Embedding generation
+    profile_text = build_candidate_profile_text(cand)
+    vector = embed_batch([profile_text])[0]
+
+    # 8. ChromaDB write
+    metadata = {
+        "name":            cand.get("name", ""),
+        "current_title":   cand.get("current_title", ""),
+        "domain":          cand.get("domain", ""),
+        "years_experience": str(cand.get("years_experience", 0)),
+    }
+    add_candidates([cand["id"]], [vector], [metadata], [profile_text])
+
+    return cand
 
 
 if __name__ == "__main__":
@@ -269,7 +499,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--dataset",
         default=DATASET_PATH,
-        help="Path to candidates CSV file",
+        help="Path to candidates CSV or JSONL file",
     )
     args = parser.parse_args()
     ingest(args.dataset)

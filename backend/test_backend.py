@@ -15,9 +15,9 @@ Tests (no server needed):
 import asyncio, json, sys
 
 def sep(title):
-    print(f"\n{'─'*55}")
+    print(f"\n{'-'*55}")
     print(f"  {title}")
-    print('─'*55)
+    print('-'*55)
 
 # ── 1. Database ────────────────────────────────────────────────────────────────
 sep("1 / 6  Database")
@@ -52,17 +52,17 @@ sample = {
 upsert_candidate(sample)
 fetched = get_candidate("TEST_001")
 assert fetched is not None, "Candidate fetch failed"
-print(f"  ✅ DB OK — {count_candidates()} candidate(s) in DB")
+print(f"  [OK] DB OK -- {count_candidates()} candidate(s) in DB")
 
 # ── 2. Embedder ────────────────────────────────────────────────────────────────
 sep("2 / 6  Embedder")
 from embedder import embed_text, embed_batch, build_candidate_profile_text
 
 profile_text = build_candidate_profile_text(sample)
-print(f"  Profile text: {profile_text[:80]}…")
+print(f"  Profile text: {profile_text[:80]}...")
 vec = embed_text(profile_text)
 assert len(vec) == 384, f"Expected 384-dim vector, got {len(vec)}"
-print(f"  ✅ Embedder OK — vector dim: {len(vec)}")
+print(f"  [OK] Embedder OK -- vector dim: {len(vec)}")
 
 # ── 3. Vector store ────────────────────────────────────────────────────────────
 sep("3 / 6  Vector store (ChromaDB)")
@@ -80,7 +80,7 @@ print(f"  Vectors in store: {vcount()}")
 query_vec = embed_text("Python FastAPI backend engineer with Docker experience")
 results   = search(query_vec, top_n=3)
 assert len(results) > 0, "Vector search returned nothing"
-print(f"  ✅ Vector store OK — top result: {results[0]['candidate_id']} "
+print(f"  [OK] Vector store OK -- top result: {results[0]['candidate_id']} "
       f"(similarity: {results[0]['similarity']})")
 
 # ── 4. JD Parser ──────────────────────────────────────────────────────────────
@@ -102,7 +102,7 @@ print(f"  Domain:           {parsed.get('domain')}")
 print(f"  Required skills:  {parsed.get('required_skills', [])[:5]}")
 print(f"  Seniority:        {parsed.get('seniority_level')}")
 assert "required_skills" in parsed, "JD parse missing required_skills"
-print("  ✅ JD Parser OK")
+print("  [OK] JD Parser OK")
 
 # ── 5. All 5 Scorers ──────────────────────────────────────────────────────────
 sep("5 / 6  All 5 Scorers")
@@ -123,7 +123,7 @@ print(f"  Trajectory score:  {traj:.4f}")
 print(f"  Behavioral score:  {beh:.4f}")
 print(f"  Domain score:      {dom:.4f}")
 assert all(0 <= s <= 1 for s in [sem, sk, traj, beh, dom]), "Score out of 0-1 range"
-print("  ✅ All scorers OK")
+print("  [OK] All scorers OK")
 
 # ── 6. Combiner ───────────────────────────────────────────────────────────────
 sep("6 / 6  Combiner")
@@ -134,11 +134,11 @@ score_dict = build_score_dict("TEST_001", sem, sk, traj, beh, dom)
 print(f"  Composite score (0-100): {composite}")
 print(f"  Score dict: {json.dumps({k: v for k, v in score_dict.items() if '_score' in k}, indent=4)}")
 assert 0 <= composite <= 100, "Composite score out of 0-100 range"
-print("  ✅ Combiner OK")
+print("  [OK] Combiner OK")
 
 # ── Summary ────────────────────────────────────────────────────────────────────
-print(f"\n{'═'*55}")
-print("  ✅  ALL TESTS PASSED — backend is ready!")
+print(f"\n{'='*55}")
+print("  [OK] ALL TESTS PASSED -- backend is ready!")
 print("  Run the server with:")
 print("      uvicorn main:app --reload --port 8000")
-print(f"{'═'*55}\n")
+print(f"{'='*55}\n")

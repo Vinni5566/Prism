@@ -67,18 +67,18 @@ def apply_feedback_boost(
         if cid in strong_yes_ids:
             # Already confirmed good — small boost for visibility
             score = min(100.0, score * 1.05)
-            new_result["feedback_tag"] = "✅ Shortlisted"
+            new_result["feedback_tag"] = "[+] Shortlisted"
 
         elif cid in maybe_ids:
             # Recruiter is hesitant — mild penalty
             score = score * 0.90
-            new_result["feedback_tag"] = "⚠️ Maybe"
+            new_result["feedback_tag"] = "[?] Maybe"
 
         elif cid in similarity_boosts:
             # Candidate is similar to a 'strong_yes' pick — boost proportionally
             boost = similarity_boosts[cid]
             score = min(100.0, score * (1 + boost * 0.15))
-            new_result["feedback_tag"] = f"🔗 Similar to shortlisted ({boost:.0%})"
+            new_result["feedback_tag"] = f"[~] Similar to shortlisted ({boost:.0%})"
 
         else:
             new_result["feedback_tag"] = ""

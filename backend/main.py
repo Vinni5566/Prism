@@ -11,7 +11,7 @@ import io
 import uuid
 from typing import Dict, List, Optional
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks
+from fastapi import FastAPI, HTTPException, BackgroundTasks, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
@@ -21,6 +21,7 @@ from database import (
     init_db, count_candidates,
     get_candidate, get_all_candidates,
     get_ranked_results, save_feedback, get_jd_run,
+    list_jd_runs, get_analytics,
 )
 from vector_store import count as vcount
 from ranker import rank_candidates
@@ -45,6 +46,17 @@ app.add_middleware(
 def on_startup():
     init_db()
     print("[API] Database initialised.")
+    try:
+        cand_count = count_candidates()
+        vector_count = vcount()
+        print(f"[API] Initial count check: {cand_count} candidates in DB, {vector_count} vectors in store.")
+        if cand_count == 0 or vector_count == 0:
+            print("[API] Database or vector store is empty. Seeding demo data...")
+            from seed import run_seeding
+            run_seeding()
+            print(f"[API] Seeding complete. Candidates: {count_candidates()}, Vectors: {vcount()}")
+    except Exception as e:
+        print(f"[API] Error checking/seeding database: {e}")
 
 
 # ── Pydantic request/response models ──────────────────────────────────────────
@@ -233,3 +245,184 @@ def stats():
         "total_candidates": count_candidates(),
         "vectors_indexed":  vcount(),
     }
+
+
+@app.get("/analytics")
+def analytics():
+    """
+    Aggregate analytics for the Analytics Dashboard page.
+    Returns domain distribution, top skills, score stats, recent runs.
+    """
+    try:
+        return get_analytics()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/runs")
+def list_runs(limit: int = 50):
+    """List all past ranking runs (most recent first)."""
+    try:
+        runs = list_jd_runs(limit=limit)
+        return {"total": len(runs), "runs": runs}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/candidates/upload")
+async def upload_candidates(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...)
+):
+    """
+    Upload a CSV of candidates or a PDF resume, and ingest them.
+    Supports:
+      - .csv: Bulk candidate load (similar to data_ingest.py).
+      - .pdf: Interactive resume parsing using NVIDIA NIM.
+    """
+    import os
+    import uuid
+    import shutil
+    import io
+    
+    filename = file.filename or ""
+    if filename.endswith(".csv"):
+        temp_dir = "data/temp"
+        os.makedirs(temp_dir, exist_ok=True)
+        temp_file_path = os.path.join(temp_dir, f"upload_{uuid.uuid4().hex}.csv")
+        
+        try:
+            # Save upload to temp file
+            with open(temp_file_path, "wb") as f:
+                shutil.copyfileobj(file.file, f)
+            
+            from data_ingest import ingest
+            from database import count_candidates as db_count
+            
+            before_count = db_count()
+            ingest(temp_file_path)
+            after_count = db_count()
+            added = after_count - before_count
+            
+            # Clean up temp file
+            if os.path.exists(temp_file_path):
+                os.remove(temp_file_path)
+                
+            return {
+                "status": "success",
+                "type": "csv",
+                "added_count": added,
+                "total_count": after_count
+            }
+        except Exception as e:
+            if os.path.exists(temp_file_path):
+                os.remove(temp_file_path)
+            raise HTTPException(status_code=500, detail=f"CSV upload failed: {str(e)}")
+            
+    elif filename.endswith(".pdf"):
+        import pypdf
+        from resume_parser import parse_resume_text
+        from data_ingest import ingest_single_candidate
+        
+        try:
+            pdf_bytes = await file.read()
+            pdf_file = io.BytesIO(pdf_bytes)
+            
+            # Extract text from PDF
+            reader = pypdf.PdfReader(pdf_file)
+            text_parts = []
+            for page in reader.pages:
+                text_parts.append(page.extract_text() or "")
+            full_text = "\n".join(text_parts)
+            
+            if not full_text.strip():
+                raise HTTPException(status_code=400, detail="The uploaded PDF contains no extractable text.")
+            
+            # Parse resume using LLaMA via NVIDIA NIM
+            parsed_cand = parse_resume_text(full_text)
+            
+            # Ingest candidate
+            ingested_cand = ingest_single_candidate(parsed_cand)
+            
+            return {
+                "status": "success",
+                "type": "pdf",
+                "candidate": {
+                    "id": ingested_cand["id"],
+                    "name": ingested_cand["name"],
+                    "current_title": ingested_cand["current_title"],
+                    "skills": ingested_cand["skills"]
+                }
+            }
+        except ValueError as ve:
+            raise HTTPException(status_code=400, detail=str(ve))
+        except Exception as e:
+            print(f"[API] PDF Ingestion failed: {e}")
+            raise HTTPException(status_code=500, detail=f"PDF parsing failed: {str(e)}")
+            
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Unsupported file format. Please upload a .csv or .pdf file."
+        )
+
+
+class JDAnalyzeRequest(BaseModel):
+    jd_text: str
+
+
+@app.post("/jd/analyze")
+def analyze_jd(request: JDAnalyzeRequest):
+    """Analyze raw job description text to extract structured requirements."""
+    try:
+        from jd_parser import parse_jd
+        return parse_jd(request.jd_text)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/jd/analyze/file")
+async def analyze_jd_file(file: UploadFile = File(...)):
+    """Upload a job description PDF, extract text, and run AI structured analysis."""
+    filename = file.filename or ""
+    if not filename.endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are supported.")
+    try:
+        import pypdf
+        from jd_parser import parse_jd
+        pdf_bytes = await file.read()
+        pdf_file = io.BytesIO(pdf_bytes)
+        reader = pypdf.PdfReader(pdf_file)
+        text_parts = []
+        for page in reader.pages:
+            text_parts.append(page.extract_text() or "")
+        full_text = "\n".join(text_parts)
+        if not full_text.strip():
+            raise HTTPException(status_code=400, detail="PDF has no extractable text.")
+        analysis = parse_jd(full_text)
+        analysis["jd_text"] = full_text
+        return analysis
+    except Exception as e:
+        print(f"[API] JD PDF parsing failed: {e}")
+        raise HTTPException(status_code=500, detail=f"JD PDF parsing failed: {str(e)}")
+
+
+@app.get("/candidates/search")
+def search_candidates_api(q: str, limit: int = 50):
+    """Semantic search candidate pool using ChromaDB cosine similarity."""
+    try:
+        from vector_store import search as vector_search
+        from database import get_candidate
+        
+        vector_results = vector_search(q, top_n=limit)
+        results = []
+        for r in vector_results:
+            cand = get_candidate(r["candidate_id"])
+            if cand:
+                cand["similarity_score"] = r["similarity"]
+                results.append(cand)
+        return results
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+

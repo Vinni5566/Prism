@@ -28,13 +28,32 @@ CREATE TABLE IF NOT EXISTS candidates (
     current_company     TEXT,
     years_experience    REAL DEFAULT 0,
     skills              TEXT,          -- JSON list
-    career_history      TEXT,          -- JSON list of {title, company, start, end, description}
+    career_history      TEXT,          -- JSON list
     education           TEXT,          -- JSON list
     domain              TEXT,
     last_active         TEXT,          -- ISO date string
     profile_completeness REAL DEFAULT 0,
     activity_score      REAL DEFAULT 0,
     raw_data            TEXT,          -- full original row as JSON
+    headline            TEXT,
+    summary             TEXT,
+    country             TEXT,
+    current_company_size TEXT,
+    current_industry    TEXT,
+    certifications      TEXT,          -- JSON list
+    languages           TEXT,          -- JSON list
+    redrob_signals      TEXT,          -- JSON dict
+    intent_score        REAL DEFAULT 0,
+    hidden_gem_score    REAL DEFAULT 0,
+    max_promotion_velocity REAL DEFAULT 0,
+    avg_time_in_role_months REAL DEFAULT 0,
+    created_at          TEXT DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS auth_users (
+    username            TEXT PRIMARY KEY,
+    password            TEXT NOT NULL,
+    role                TEXT NOT NULL, -- 'recruiter' | 'candidate' | 'admin'
     created_at          TEXT DEFAULT (datetime('now'))
 );
 
@@ -111,12 +130,18 @@ def upsert_candidate(candidate: Dict[str, Any]):
             id, name, email, phone, location,
             current_title, current_company, years_experience,
             skills, career_history, education, domain,
-            last_active, profile_completeness, activity_score, raw_data
+            last_active, profile_completeness, activity_score, raw_data,
+            headline, summary, country, current_company_size, current_industry,
+            certifications, languages, redrob_signals,
+            intent_score, hidden_gem_score, max_promotion_velocity, avg_time_in_role_months
         ) VALUES (
             :id, :name, :email, :phone, :location,
             :current_title, :current_company, :years_experience,
             :skills, :career_history, :education, :domain,
-            :last_active, :profile_completeness, :activity_score, :raw_data
+            :last_active, :profile_completeness, :activity_score, :raw_data,
+            :headline, :summary, :country, :current_company_size, :current_industry,
+            :certifications, :languages, :redrob_signals,
+            :intent_score, :hidden_gem_score, :max_promotion_velocity, :avg_time_in_role_months
         )
         ON CONFLICT(id) DO UPDATE SET
             name=excluded.name,
@@ -124,13 +149,62 @@ def upsert_candidate(candidate: Dict[str, Any]):
             current_company=excluded.current_company,
             skills=excluded.skills,
             career_history=excluded.career_history,
+            education=excluded.education,
+            location=excluded.location,
+            years_experience=excluded.years_experience,
             last_active=excluded.last_active,
             profile_completeness=excluded.profile_completeness,
             activity_score=excluded.activity_score,
-            raw_data=excluded.raw_data
+            raw_data=excluded.raw_data,
+            headline=excluded.headline,
+            summary=excluded.summary,
+            country=excluded.country,
+            current_company_size=excluded.current_company_size,
+            current_industry=excluded.current_industry,
+            certifications=excluded.certifications,
+            languages=excluded.languages,
+            redrob_signals=excluded.redrob_signals,
+            intent_score=excluded.intent_score,
+            hidden_gem_score=excluded.hidden_gem_score,
+            max_promotion_velocity=excluded.max_promotion_velocity,
+            avg_time_in_role_months=excluded.avg_time_in_role_months
     """
-    row = {k: (json.dumps(v) if isinstance(v, (list, dict)) else v)
-           for k, v in candidate.items()}
+    row = {
+        "id": candidate.get("id"),
+        "name": candidate.get("name"),
+        "email": candidate.get("email"),
+        "phone": candidate.get("phone"),
+        "location": candidate.get("location"),
+        "current_title": candidate.get("current_title"),
+        "current_company": candidate.get("current_company"),
+        "years_experience": candidate.get("years_experience"),
+        "skills": candidate.get("skills"),
+        "career_history": candidate.get("career_history"),
+        "education": candidate.get("education"),
+        "domain": candidate.get("domain"),
+        "last_active": candidate.get("last_active"),
+        "profile_completeness": candidate.get("profile_completeness"),
+        "activity_score": candidate.get("activity_score"),
+        "raw_data": candidate.get("raw_data"),
+        "headline": candidate.get("headline", ""),
+        "summary": candidate.get("summary", ""),
+        "country": candidate.get("country", ""),
+        "current_company_size": candidate.get("current_company_size", ""),
+        "current_industry": candidate.get("current_industry", ""),
+        "certifications": candidate.get("certifications", []),
+        "languages": candidate.get("languages", []),
+        "redrob_signals": candidate.get("redrob_signals", {}),
+        "intent_score": candidate.get("intent_score", 0.0),
+        "hidden_gem_score": candidate.get("hidden_gem_score", 0.0),
+        "max_promotion_velocity": candidate.get("max_promotion_velocity", 0.0),
+        "avg_time_in_role_months": candidate.get("avg_time_in_role_months", 0.0)
+    }
+    
+    # Serialise lists and dicts
+    for k, v in row.items():
+        if isinstance(v, (list, dict)):
+            row[k] = json.dumps(v)
+
     with get_conn() as conn:
         conn.execute(sql, row)
 
@@ -278,7 +352,128 @@ def _safe_json(val):
 
 def _deserialise(row: Dict) -> Dict:
     """Parse JSON string fields back into Python objects."""
-    for field in ("skills", "career_history", "education", "raw_data"):
+    for field in ("skills", "career_history", "education", "raw_data", "certifications", "languages", "redrob_signals"):
         if isinstance(row.get(field), str):
             row[field] = _safe_json(row[field])
     return row
+
+
+# ── Auth operations ───────────────────────────────────────────────────────────
+
+def save_user(username: str, password_hash: str, role: str):
+    sql = """
+        INSERT INTO auth_users (username, password, role)
+        VALUES (?, ?, ?)
+        ON CONFLICT(username) DO UPDATE SET
+            password=excluded.password,
+            role=excluded.role
+    """
+    with get_conn() as conn:
+        conn.execute(sql, (username, password_hash, role))
+
+
+def get_user(username: str) -> Optional[Dict]:
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM auth_users WHERE username = ?", (username,)
+        ).fetchone()
+    if not row:
+        return None
+    return dict(row)
+
+
+# ── Analytics & run-listing operations ────────────────────────────────────────
+
+def list_jd_runs(limit: int = 50) -> List[Dict]:
+    """Return the most recent JD runs (descending by creation time)."""
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT run_id, jd_text, jd_parsed, weights, created_at FROM jd_runs ORDER BY created_at DESC LIMIT ?",
+            (limit,)
+        ).fetchall()
+    results = []
+    for r in rows:
+        d = dict(r)
+        d["jd_parsed"] = _safe_json(d.get("jd_parsed") or "{}")
+        d["weights"]   = _safe_json(d.get("weights") or "{}")
+        # Truncate jd_text for listing
+        d["jd_preview"] = (d["jd_text"] or "")[:200]
+        results.append(d)
+    return results
+
+
+def get_analytics() -> Dict:
+    """Aggregate pool-level analytics for the dashboard."""
+    with get_conn() as conn:
+        total = conn.execute("SELECT COUNT(*) FROM candidates").fetchone()[0]
+
+        # Domain distribution
+        domain_rows = conn.execute(
+            "SELECT domain, COUNT(*) as cnt FROM candidates WHERE domain != '' GROUP BY domain ORDER BY cnt DESC LIMIT 15"
+        ).fetchall()
+
+        # Avg experience
+        avg_exp = conn.execute(
+            "SELECT AVG(years_experience) FROM candidates WHERE years_experience > 0"
+        ).fetchone()[0] or 0
+
+        # Top skills (aggregate across all candidates)
+        skill_rows = conn.execute(
+            "SELECT skills FROM candidates WHERE skills IS NOT NULL AND skills != '[]'"
+        ).fetchall()
+
+        # Score stats from most recent run
+        score_row = conn.execute("""
+            SELECT
+                AVG(composite_score) as avg_score,
+                MAX(composite_score) as max_score,
+                MIN(composite_score) as min_score,
+                COUNT(DISTINCT run_id) as total_runs
+            FROM candidate_scores
+        """).fetchone()
+
+        # Recent runs summary
+        run_rows = conn.execute("""
+            SELECT run_id, created_at,
+                   COUNT(*) as candidates_evaluated,
+                   MAX(composite_score) as top_score
+            FROM candidate_scores
+            GROUP BY run_id
+            ORDER BY created_at DESC
+            LIMIT 10
+        """).fetchall()
+
+    # Process top skills
+    from collections import Counter
+    skill_counter: Counter = Counter()
+    for row in skill_rows:
+        skills = _safe_json(row[0])
+        if isinstance(skills, list):
+            for s in skills:
+                if isinstance(s, str) and s.strip():
+                    skill_counter[s.strip()] += 1
+
+    top_skills = [{"skill": s, "count": c} for s, c in skill_counter.most_common(20)]
+
+    return {
+        "total_candidates": total,
+        "avg_experience_years": round(avg_exp, 1),
+        "domain_distribution": [{"domain": r[0] or "Unknown", "count": r[1]} for r in domain_rows],
+        "top_skills": top_skills,
+        "score_stats": {
+            "avg":        round(float(score_row[0] or 0) * 100, 1),
+            "max":        round(float(score_row[1] or 0) * 100, 1),
+            "min":        round(float(score_row[2] or 0) * 100, 1),
+            "total_runs": int(score_row[3] or 0),
+        },
+        "recent_runs": [
+            {
+                "run_id":               r[0],
+                "created_at":           r[1],
+                "candidates_evaluated": r[2],
+                "top_score":            round(float(r[3] or 0) * 100, 1),
+            }
+            for r in run_rows
+        ],
+    }
+

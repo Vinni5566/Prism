@@ -206,7 +206,7 @@ async def rank_candidates(
             "outreach_msg": score.get("outreach_msg", ""),
         })
 
-    print(f"\n[Ranker] ✅ Run {run_id[:8]} complete. Top candidate: "
+    print(f"\n[Ranker] Run {run_id[:8]} complete. Top candidate: "
           f"{results[0]['name'] if results else 'N/A'} "
           f"(score: {results[0]['composite_score'] if results else 0})\n")
 
