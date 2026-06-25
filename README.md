@@ -1,4 +1,4 @@
-# 🔮 Prism
+# 🔮 Prism- Where AI Meets Intelligent Hiring
 
 <div align="center">
 
