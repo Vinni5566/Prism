@@ -11,12 +11,10 @@ export default function Sidebar({ activePage, onPageChange }) {
   const { user, logout } = useAuth();
 
   const menuItems = [
-    { id: 'dashboard', label: 'Dashboard', icon: <BarChart2 size={18} />, roles: ['recruiter', 'admin'] },
-    { id: 'pool', label: 'Candidate Pool', icon: <Users size={18} />, roles: ['recruiter', 'admin'] },
-    { id: 'analytics', label: 'Analytics', icon: <Activity size={18} />, roles: ['recruiter', 'admin'] },
-    { id: 'history', label: 'Run History', icon: <Cpu size={18} />, roles: ['recruiter', 'admin'] },
-    { id: 'integrations', label: 'Integrations', icon: <Layers size={18} />, roles: ['recruiter', 'admin'] },
-    { id: 'admin', label: 'Admin Portal', icon: <Shield size={18} />, roles: ['admin'] },
+    { id: 'dashboard', label: 'Dashboard', icon: <BarChart2 size={18} />, roles: ['recruiter'] },
+    { id: 'pool', label: 'Candidate Pool', icon: <Users size={18} />, roles: ['recruiter'] },
+    { id: 'analytics', label: 'Analytics', icon: <Activity size={18} />, roles: ['recruiter'] },
+    { id: 'history', label: 'Run History', icon: <Cpu size={18} />, roles: ['recruiter'] },
   ];
 
   const filteredItems = menuItems.filter(item => item.roles.includes(user?.role));
@@ -38,8 +36,8 @@ export default function Sidebar({ activePage, onPageChange }) {
                 exit={{ opacity: 0, x: -10 }}
                 className="flex items-center gap-2"
               >
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-gradient-to-br from-teal-500 to-purple-600 text-white font-bold">
-                  🔮
+                <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold">
+                  <img src="/logo.jpg" alt="Prism Logo" className="w-full h-full object-cover rounded-lg" />
                 </div>
                 <div>
                   <h2 className="text-sm font-bold text-slate-100 leading-none">Prism AI</h2>
@@ -50,8 +48,8 @@ export default function Sidebar({ activePage, onPageChange }) {
           </AnimatePresence>
 
           {isCollapsed && (
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center bg-gradient-to-br from-teal-500 to-purple-600 text-white font-bold mx-auto">
-              🔮
+            <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold mx-auto">
+              <img src="/logo.jpg" alt="Prism Logo" className="w-full h-full object-cover rounded-lg" />
             </div>
           )}
 

@@ -29,6 +29,9 @@ export const getCandidates = (limit = 100, offset = 0) =>
 export const getCandidateById = (id) =>
   api.get(`/candidates/${id}`).then(r => r.data);
 
+export const updateCandidate = (id, data) =>
+  api.put(`/candidates/${id}`, data).then(r => r.data);
+
 // ── Feedback ───────────────────────────────────────────────────────────────────
 /**
  * POST /feedback

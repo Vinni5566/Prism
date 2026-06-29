@@ -14,9 +14,8 @@ export default function Header({ backendStatus, stats, activePage, onPageChange 
           {/* Logo + tagline */}
           <div className="flex items-center gap-4">
             <div className="flex items-center gap-2.5 cursor-pointer" onClick={() => onPageChange('landing')}>
-              <div className="relative w-9 h-9 rounded-xl flex items-center justify-center"
-                   style={{ background: 'linear-gradient(135deg,#0d9488,#7c3aed)' }}>
-                <span className="text-lg">🔮</span>
+              <div className="relative w-9 h-9 rounded-xl flex items-center justify-center">
+                <img src="/logo.jpg" alt="Prism Logo" className="w-full h-full object-cover rounded-xl" />
                 <div className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-emerald-400 border-2 border-slate-950"
                      style={{ display: isOnline ? 'block' : 'none' }} />
               </div>
@@ -26,8 +25,8 @@ export default function Header({ backendStatus, stats, activePage, onPageChange 
               </div>
             </div>
 
-            {/* Nav - Only show when authenticated and role is recruiter or admin */}
-            {isAuthenticated && (user.role === 'recruiter' || user.role === 'admin') && (
+            {/* Nav - Only show when authenticated and role is recruiter */}
+            {isAuthenticated && user.role === 'recruiter' && (
               <nav className="hidden sm:flex ml-4 gap-1">
                 {[
                   { id: 'dashboard', label: 'Dashboard',      icon: <BarChart2 size={14}/> },

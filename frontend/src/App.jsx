@@ -16,7 +16,6 @@ import LandingPage from './pages/LandingPage'
 import LoginPage from './pages/auth/LoginPage'
 import RegisterPage from './pages/auth/RegisterPage'
 import CandidateHome from './pages/candidate/CandidateHome'
-import AdminDashboard from './pages/admin/AdminDashboard'
 import Integrations from './pages/Integrations'
 import ProtectedRoute from './components/ProtectedRoute'
 import { AuthProvider, useAuth } from './context/AuthContext'
@@ -72,8 +71,6 @@ function MainApp() {
     if (isAuthenticated) {
       if (user.role === 'candidate') {
         setActivePage('candidate')
-      } else if (user.role === 'admin') {
-        setActivePage('admin')
       } else {
         setActivePage('dashboard')
       }
@@ -215,7 +212,7 @@ function MainApp() {
     return <LandingPage onNavigate={navigateTo} />
   }
 
-  const showSidebar = isAuthenticated && (user.role === 'recruiter' || user.role === 'admin');
+  const showSidebar = isAuthenticated && user.role === 'recruiter';
 
   return (
     <div className="min-h-screen flex">
@@ -282,12 +279,8 @@ function MainApp() {
             <ProtectedRoute allowedRoles={['candidate']}>
               <CandidateHome />
             </ProtectedRoute>
-          ) : activePage === 'admin' ? (
-            <ProtectedRoute allowedRoles={['admin']}>
-              <AdminDashboard />
-            </ProtectedRoute>
           ) : activePage === 'pool' ? (
-            <ProtectedRoute allowedRoles={['recruiter', 'admin']}>
+            <ProtectedRoute allowedRoles={['recruiter']}>
               <CandidatePool
                 candidates={candidates}
                 onRefresh={loadInitial}
@@ -295,19 +288,19 @@ function MainApp() {
               />
             </ProtectedRoute>
           ) : activePage === 'analytics' ? (
-            <ProtectedRoute allowedRoles={['recruiter', 'admin']}>
+            <ProtectedRoute allowedRoles={['recruiter']}>
               <AnalyticsDashboard />
             </ProtectedRoute>
           ) : activePage === 'integrations' ? (
-            <ProtectedRoute allowedRoles={['recruiter', 'admin']}>
+            <ProtectedRoute allowedRoles={['recruiter']}>
               <Integrations />
             </ProtectedRoute>
           ) : activePage === 'history' ? (
-            <ProtectedRoute allowedRoles={['recruiter', 'admin']}>
+            <ProtectedRoute allowedRoles={['recruiter']}>
               <RunHistory />
             </ProtectedRoute>
           ) : (
-            <ProtectedRoute allowedRoles={['recruiter', 'admin']}>
+            <ProtectedRoute allowedRoles={['recruiter']}>
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <section className="lg:col-span-1 space-y-6">
                   <JDInput
@@ -382,9 +375,8 @@ function MainApp() {
                                style={{ background: 'radial-gradient(circle, #7c3aed, transparent)' }} />
                         </div>
                         <div className="relative">
-                          <div className="w-16 h-16 rounded-2xl mx-auto mb-4 flex items-center justify-center text-3xl"
-                               style={{ background: 'linear-gradient(135deg, #0d9488, #7c3aed)', boxShadow: '0 8px 32px rgba(13,148,136,0.3)' }}>
-                            🔮
+                          <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-6 mx-auto">
+                            <img src="/logo.jpg" alt="Prism Logo" className="w-full h-full object-cover rounded-2xl" />
                           </div>
                           <h2 className="text-2xl font-black text-slate-100 mb-2">
                             Rank Your <span className="gradient-text">Candidate Pool</span>

@@ -78,10 +78,7 @@ export default function LandingPage({ onNavigate }) {
       <nav className="fixed top-0 left-0 right-0 z-50 glass border-b border-white/5">
         <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center"
-                 style={{ background: 'linear-gradient(135deg,#0d9488,#7c3aed)' }}>
-              <span className="text-lg">🔮</span>
-            </div>
+            <img src="/logo.jpg" alt="Prism Logo" className="w-5 h-5 object-contain" />
             <div>
               <div className="text-lg font-bold gradient-text leading-none">Prism</div>
               <div className="text-[10px] text-slate-500 font-mono leading-none">AI RECRUITMENT INTELLIGENCE</div>
@@ -296,9 +293,9 @@ export default function LandingPage({ onNavigate }) {
       {/* ── Footer ── */}
       <footer className="py-10 px-6 border-t border-white/5">
         <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2">
-            <span className="text-slate-600 text-sm">🔮 Prism AI</span>
-            <span className="text-slate-700 text-xs">— Redrob Data & AI Challenge</span>
+          <div className="flex items-center gap-2 mb-4 md:mb-0">
+            <img src="/logo.jpg" alt="Prism Logo" className="w-4 h-4 object-contain" />
+            <span className="text-slate-600 text-sm">Prism AI</span>
           </div>
           <div className="text-xs text-slate-700">Built with NVIDIA NIM · LLaMA-3.1-70B · sentence-transformers · ChromaDB</div>
         </div>

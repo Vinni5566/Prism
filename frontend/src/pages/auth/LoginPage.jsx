@@ -21,16 +21,7 @@ const ROLE_HINTS = {
     border: 'border-violet-500/30',
     emoji: '👤',
     desc: 'Build profile, analyze resume, track readiness',
-  },
-  admin: {
-    email: 'admin@prism.ai',
-    label: 'Admin',
-    color: '#f59e0b',
-    gradient: 'from-amber-500/20 to-amber-600/5',
-    border: 'border-amber-500/30',
-    emoji: '🛡️',
-    desc: 'System health, model config, logs',
-  },
+  }
 };
 
 export default function LoginPage({ onBack, onSuccess, defaultRole }) {
@@ -95,10 +86,9 @@ export default function LoginPage({ onBack, onSuccess, defaultRole }) {
             initial={{ scale: 0.8, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ delay: 0.1, duration: 0.4 }}
-            className="flex justify-center mb-5">
-            <div className="w-16 h-16 rounded-2xl flex items-center justify-center shadow-[0_8px_32px_rgba(13,148,136,0.35)]"
-                 style={{ background: 'linear-gradient(135deg, #0d9488, #7c3aed)' }}>
-              <span className="text-2xl">🔮</span>
+            className="flex justify-center mb-4">
+            <div className="w-14 h-14 rounded-2xl flex items-center justify-center">
+              <img src="/logo.jpg" alt="Prism Logo" className="w-full h-full object-cover rounded-2xl" />
             </div>
           </motion.div>
           <h1 className="text-3xl font-black text-slate-100">Welcome Back</h1>
@@ -112,7 +102,7 @@ export default function LoginPage({ onBack, onSuccess, defaultRole }) {
             <div className="text-[10px] text-slate-500 mb-3 font-bold uppercase tracking-widest text-center">
               Quick Demo Access — Pick a Role
             </div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               {Object.entries(ROLE_HINTS).map(([role, h]) => (
                 <button
                   key={role}

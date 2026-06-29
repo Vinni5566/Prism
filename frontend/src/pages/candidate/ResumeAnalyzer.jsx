@@ -39,7 +39,7 @@ export default function ResumeAnalyzer({ onAnalysisFinished }) {
   const handleFinish = () => {
     // Generate a random high score between 75 and 96
     const score = Math.floor(Math.random() * 22) + 75;
-    onAnalysisFinished(score);
+    onAnalysisFinished(score, parsedData);
   };
 
   return (

@@ -83,6 +83,16 @@ class FeedbackRequest(BaseModel):
     notes:         Optional[str] = ""
 
 
+class CandidateUpdate(BaseModel):
+    name: Optional[str] = None
+    title: Optional[str] = None
+    experienceYears: Optional[float] = None
+    skills: Optional[List[str]] = None
+    github: Optional[str] = None
+    linkedin: Optional[str] = None
+    certifications: Optional[List[str]] = None
+
+
 # ── Routes ─────────────────────────────────────────────────────────────────────
 
 @app.get("/health")
@@ -157,6 +167,42 @@ def get_one_candidate(candidate_id: str):
     if not cand:
         raise HTTPException(status_code=404, detail="Candidate not found.")
     return cand
+
+
+@app.put("/candidates/{candidate_id}")
+def update_one_candidate(candidate_id: str, update_data: CandidateUpdate):
+    """Update profile details from Candidate Dashboard and re-ingest to Chroma."""
+    try:
+        from database import upsert_candidate
+        from data_ingest import ingest_single_candidate
+        
+        cand = get_candidate(candidate_id)
+        if not cand:
+            raise HTTPException(status_code=404, detail="Candidate not found.")
+        
+        # Update fields
+        if update_data.name is not None:
+            cand["name"] = update_data.name
+        if update_data.title is not None:
+            cand["current_title"] = update_data.title
+        if update_data.experienceYears is not None:
+            cand["years_experience"] = update_data.experienceYears
+        if update_data.skills is not None:
+            cand["skills"] = update_data.skills
+        if update_data.certifications is not None:
+            cand["certifications"] = update_data.certifications
+            
+        # Optional: could store github/linkedin in raw_data or add to DB schema if needed
+        # but for now we just want to re-ingest for semantic search
+        upsert_candidate(cand)
+        
+        # Update vector store
+        ingest_single_candidate(cand)
+        
+        return {"status": "success", "candidate": cand}
+    except Exception as e:
+        print(f"[API] Candidate update error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.get("/runs/{run_id}")

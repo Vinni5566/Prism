@@ -6,7 +6,6 @@ import { useAuth } from '../../context/AuthContext';
 const ROLES = [
   { id: 'recruiter', label: 'Recruiter', desc: 'I hire candidates', color: '#14b8a6', emoji: '🎯' },
   { id: 'candidate', label: 'Candidate', desc: 'I\'m looking for a job', color: '#8b5cf6', emoji: '🚀' },
-  { id: 'admin',     label: 'Admin',     desc: 'I manage the system', color: '#f59e0b', emoji: '⚙️' },
 ];
 
 export default function RegisterPage({ onBack, onSuccess }) {
@@ -56,9 +55,8 @@ export default function RegisterPage({ onBack, onSuccess }) {
             <ArrowLeft size={14} /> Back to Home
           </button>
           <div className="flex justify-center mb-4">
-            <div className="w-14 h-14 rounded-2xl flex items-center justify-center"
-                 style={{ background: 'linear-gradient(135deg,#0d9488,#7c3aed)' }}>
-              <span className="text-2xl">🔮</span>
+            <div className="w-14 h-14 rounded-2xl flex items-center justify-center">
+              <img src="/logo.jpg" alt="Prism Logo" className="w-full h-full object-cover rounded-2xl" />
             </div>
           </div>
           <h1 className="text-2xl font-bold text-slate-100">Create your account</h1>
@@ -69,7 +67,7 @@ export default function RegisterPage({ onBack, onSuccess }) {
           {/* Role selector */}
           <div className="mb-6">
             <div className="text-xs font-medium text-slate-400 mb-2 uppercase tracking-wide">I am a…</div>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               {ROLES.map(r => (
                 <button key={r.id} type="button"
                         onClick={() => setRole(r.id)}

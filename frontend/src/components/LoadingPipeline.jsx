@@ -25,14 +25,12 @@ export default function LoadingPipeline() {
       {/* Animated prism logo */}
       <div className="relative flex justify-center mb-8">
         <div className="relative w-20 h-20">
-          <div className="absolute inset-0 rounded-full animate-ping"
-               style={{ background: 'rgba(20,184,166,0.15)' }} />
-          <div className="absolute inset-2 rounded-full animate-pulse-slow"
-               style={{ background: 'rgba(20,184,166,0.25)' }} />
-          <div className="absolute inset-4 rounded-full flex items-center justify-center"
-               style={{ background: 'linear-gradient(135deg,#0d9488,#7c3aed)' }}>
-            <span className="text-2xl">🔮</span>
-          </div>
+          <motion.div
+            animate={{ rotate: 360 }}
+            transition={{ duration: 8, repeat: Infinity, ease: 'linear' }}
+            className="w-16 h-16 rounded-3xl flex items-center justify-center border-4 border-slate-900 shadow-xl mx-auto z-10 relative">
+            <img src="/logo.jpg" alt="Prism Logo" className="w-full h-full object-cover rounded-[1.2rem]" />
+          </motion.div>
         </div>
       </div>
 

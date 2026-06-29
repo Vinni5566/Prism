@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import {
   FileText, Shield, Star, BookOpen, AlertCircle, ArrowUpRight,
@@ -7,49 +7,111 @@ import {
 import ProgressRing from '../../components/ProgressRing';
 import ResumeAnalyzer from './ResumeAnalyzer';
 import ProfileBuilder from './ProfileBuilder';
+import { getCandidates, updateCandidate } from '../../api/client';
+import { useAuth } from '../../context/AuthContext';
 
 export default function CandidateHome() {
   const [activeSubTab, setActiveSubTab] = useState('overview'); // 'overview' | 'builder' | 'resume'
   
-  // Mock candidate profile data (tied to candidate@prism.ai)
-  const [profile, setProfile] = useState({
-    name: 'Jordan Smith',
-    title: 'Software Engineer',
-    skills: ['React', 'JavaScript', 'Node.js', 'Git', 'HTML5', 'CSS3'],
-    experienceYears: 2.5,
-    education: [{ degree: 'B.Tech Computer Science', school: 'Delhi Technological University', year: '2023' }],
-    certifications: ['AWS Certified Cloud Practitioner'],
-    github: 'https://github.com/jordansmith-demo',
-    linkedin: 'https://linkedin.com/in/jordansmith-demo',
-  });
+  const [loading, setLoading] = useState(true);
+  const [profile, setProfile] = useState(null);
+  const { user } = useAuth();
+  
+  useEffect(() => {
+    // Fetch a candidate (e.g. the first one in the DB) to act as the logged in user
+    getCandidates(1).then(data => {
+      const candidates = data.candidates || [];
+      if (candidates.length > 0) {
+        const cand = candidates[0];
+        setProfile({
+          id: cand.id,
+          name: user?.name || cand.name || 'Unknown Candidate',
+          title: user?.title || cand.current_title || 'Software Engineer',
+          skills: cand.skills || [],
+          experienceYears: cand.years_experience || 0,
+          education: cand.education || [],
+          certifications: cand.certifications || [],
+          github: '',
+          linkedin: ''
+        });
+      }
+      setLoading(false);
+    }).catch(err => {
+      console.error(err);
+      setLoading(false);
+    });
+  }, [user]);
 
   const [scores, setScores] = useState({
-    profileCompletion: 65,
-    resumeScore: 78,
-    interviewReadiness: 72,
-    marketReadiness: 80,
+    profileCompletion: 0,
+    resumeScore: 0,
+    interviewReadiness: 0,
+    marketReadiness: 0,
   });
 
-  const missingSkills = ['TypeScript', 'Docker', 'FastAPI', 'PostgreSQL'];
-  
-  const recommendations = {
-    projects: [
-      { name: 'Serverless REST API', desc: 'Build an API using AWS Lambda, API Gateway, and DynamoDB.', skill: 'AWS' },
-      { name: 'Dockerized Microservices', desc: 'Containerize a Node.js and Python FastAPI app with Docker Compose.', skill: 'Docker' }
-    ],
-    certifications: [
-      { name: 'AWS Certified Developer - Associate', provider: 'Amazon Web Services' },
-      { name: 'Docker Certified Associate (DCA)', provider: 'Docker' }
-    ]
+  const [missingSkills, setMissingSkills] = useState([]);
+  const [recommendations, setRecommendations] = useState({ projects: [], certifications: [] });
+
+  useEffect(() => {
+    if (!profile) return;
+
+    // Calculate profile completion dynamically
+    let completion = 20; // Base score for having a name/title
+    if (profile.skills?.length > 0) completion += 30;
+    if (profile.experienceYears > 0) completion += 25;
+    if (profile.certifications?.length > 0) completion += 25;
+
+    setScores(prev => ({
+      profileCompletion: completion,
+      resumeScore: prev.resumeScore > 0 ? prev.resumeScore : (profile.skills?.length > 3 ? 85 : 40),
+      interviewReadiness: profile.experienceYears > 3 ? 88 : 62,
+      marketReadiness: profile.skills?.length > 5 ? 90 : 55,
+    }));
+
+    // Generate dynamic missing skills
+    const allHighDemand = ['TypeScript', 'Docker', 'FastAPI', 'PostgreSQL', 'Kubernetes', 'React', 'Python', 'AWS'];
+    const currentSkillsUpper = (profile.skills || []).map(s => s.toUpperCase());
+    const missing = allHighDemand.filter(s => !currentSkillsUpper.includes(s.toUpperCase())).slice(0, 4);
+    setMissingSkills(missing);
+
+    // Generate dynamic recommendations
+    setRecommendations({
+      projects: [
+        { name: 'Serverless REST API', desc: 'Build an API using AWS Lambda, API Gateway, and DynamoDB.', skill: missing[0] || 'Cloud' },
+        { name: 'Microservices Architecture', desc: 'Containerize and orchestrate a multi-service app.', skill: missing[1] || 'Backend' }
+      ],
+      certifications: [
+        { name: `Certified ${missing[0] || 'Cloud'} Developer`, provider: 'Tech Certification Board' },
+        { name: `${profile.title} Professional Certification`, provider: 'Industry Standard' }
+      ]
+    });
+  }, [profile]);
+
+  const handleProfileUpdate = async (updatedProfile) => {
+    try {
+      if (profile?.id) {
+        await updateCandidate(profile.id, {
+          name: updatedProfile.name,
+          title: updatedProfile.title,
+          experienceYears: updatedProfile.experienceYears,
+          skills: updatedProfile.skills,
+          certifications: updatedProfile.certifications
+        });
+      }
+      setProfile(prev => ({ ...prev, ...updatedProfile }));
+      // Dynamically increase completion score
+      const newCompletion = Math.min(100, scores.profileCompletion + 15);
+      setScores(prev => ({ ...prev, profileCompletion: newCompletion }));
+      setActiveSubTab('overview');
+    } catch (err) {
+      console.error("Failed to update profile", err);
+      alert("Failed to update profile.");
+    }
   };
 
-  const handleProfileUpdate = (updatedProfile) => {
-    setProfile(updatedProfile);
-    // Dynamically increase completion score
-    const newCompletion = Math.min(100, scores.profileCompletion + 15);
-    setScores(prev => ({ ...prev, profileCompletion: newCompletion }));
-    setActiveSubTab('overview');
-  };
+  if (loading || !profile) {
+    return <div className="p-8 text-center text-slate-400">Loading your profile...</div>;
+  }
 
   return (
     <div className="space-y-6">
@@ -108,8 +170,16 @@ export default function CandidateHome() {
       )}
 
       {activeSubTab === 'resume' && (
-        <ResumeAnalyzer onAnalysisFinished={(score) => {
+        <ResumeAnalyzer onAnalysisFinished={(score, parsedData) => {
           setScores(prev => ({ ...prev, resumeScore: score }));
+          if (parsedData) {
+            setProfile(prev => ({
+              ...prev,
+              name: parsedData.name || prev.name,
+              title: parsedData.current_title || prev.title,
+              skills: parsedData.skills || prev.skills
+            }));
+          }
           setActiveSubTab('overview');
         }} />
       )}
@@ -167,8 +237,9 @@ export default function CandidateHome() {
                 <div className="p-4 bg-slate-950/40 border border-white/5 rounded-2xl space-y-2">
                   <span className="text-[10px] text-slate-500 uppercase tracking-wider block font-mono">Projected AI Explanation</span>
                   <p className="text-slate-300 leading-relaxed italic">
-                    "Candidate shows strong execution capabilities in modern Javascript frameworks ({profile.skills.slice(0, 3).join(', ')}). 
-                    Tenure suggests rapid growth potential. Would benefit from adding back-end integrations or containerization skills."
+                    "{profile.name} shows execution capabilities in {profile.skills?.length > 0 ? profile.skills.slice(0, 3).join(', ') : 'their field'}. 
+                    Tenure of {profile.experienceYears} years suggests {profile.experienceYears > 3 ? 'strong leadership potential' : 'rapid growth potential'}. 
+                    Would benefit from adding {missingSkills[0] || 'advanced'} or {missingSkills[1] || 'system design'} skills."
                   </p>
                 </div>
 
@@ -176,16 +247,24 @@ export default function CandidateHome() {
                   <div className="space-y-2">
                     <span className="text-[10px] text-slate-500 uppercase tracking-wider block font-mono">Perceived Strengths</span>
                     <div className="flex flex-wrap gap-1">
-                      <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded text-[10px]">Framework Depth</span>
-                      <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded text-[10px]">Academic Foundation</span>
+                      <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded text-[10px]">
+                        {profile.skills?.length > 0 ? profile.skills[0] : 'Adaptability'}
+                      </span>
+                      <span className="bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded text-[10px]">
+                        {profile.experienceYears > 3 ? 'Senior Experience' : 'Academic Foundation'}
+                      </span>
                     </div>
                   </div>
 
                   <div className="space-y-2">
                     <span className="text-[10px] text-slate-500 uppercase tracking-wider block font-mono">Perceived Gaps</span>
                     <div className="flex flex-wrap gap-1">
-                      <span className="bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded text-[10px]">Containerization</span>
-                      <span className="bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded text-[10px]">API Security</span>
+                      <span className="bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded text-[10px]">
+                        {missingSkills[0] || 'System Design'}
+                      </span>
+                      <span className="bg-red-500/10 text-red-400 border border-red-500/20 px-2 py-0.5 rounded text-[10px]">
+                        {missingSkills[1] || 'API Security'}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -234,8 +313,8 @@ export default function CandidateHome() {
             {/* Quick Profile Summary */}
             <div className="glass rounded-2xl p-5 border border-white/5 space-y-4">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-violet-400 text-lg font-bold">
-                  JS
+                <div className="w-12 h-12 rounded-xl bg-violet-500/10 border border-violet-500/20 flex items-center justify-center text-violet-400 text-lg font-bold uppercase">
+                  {profile.name.split(' ').map(n => n[0]).join('').substring(0, 2)}
                 </div>
                 <div>
                   <h3 className="text-sm font-bold text-slate-100">{profile.name}</h3>
@@ -251,7 +330,7 @@ export default function CandidateHome() {
 
                 <div className="flex justify-between items-center text-slate-400">
                   <span>Certs</span>
-                  <span className="font-mono text-slate-200">{profile.certifications.length} Active</span>
+                  <span className="font-mono text-slate-200">{profile.certifications?.length || 0} Active</span>
                 </div>
 
                 <div className="flex gap-2.5 pt-2">
@@ -274,7 +353,7 @@ export default function CandidateHome() {
               <div className="space-y-2">
                 <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider">Current Skills</h4>
                 <div className="flex flex-wrap gap-1">
-                  {profile.skills.map(s => (
+                  {profile.skills?.map(s => (
                     <span key={s} className="bg-slate-800 text-slate-300 border border-slate-700/60 px-2 py-0.5 rounded text-[10px]">
                       {s}
                     </span>
