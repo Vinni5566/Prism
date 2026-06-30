@@ -8,6 +8,8 @@
 
 [![Python](https://img.shields.io/badge/Python-3.11-blue?logo=python)](https://python.org)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115-green?logo=fastapi)](https://fastapi.tiangolo.com)
+[![React](https://img.shields.io/badge/React-18.x-61dafb?logo=react)](https://react.dev)
+[![Vite](https://img.shields.io/badge/Vite-5.x-646cff?logo=vite)](https://vitejs.dev)
 [![NVIDIA NIM](https://img.shields.io/badge/NVIDIA-NIM%20LLaMA%203.1%2070B-76b900?logo=nvidia)](https://build.nvidia.com)
 [![ChromaDB](https://img.shields.io/badge/ChromaDB-Vector%20Store-orange)](https://trychroma.com)
 [![License](https://img.shields.io/badge/License-MIT-purple)](LICENSE)
@@ -174,11 +176,26 @@ python data_ingest.py --dataset data/candidates.csv
 # 7. Run the test suite
 python test_backend.py
 
-# 8. Launch Prism
+# 8. Launch Prism Backend
 uvicorn main:app --reload --port 8000
 ```
 
 **Interactive API Docs:** http://localhost:8000/docs
+
+### Frontend Installation
+
+```bash
+# 1. Open a new terminal and navigate to the frontend directory
+cd Prism/frontend
+
+# 2. Install dependencies
+npm install
+
+# 3. Start the development server
+npm run dev
+```
+
+**Access the Web App:** http://localhost:5173
 
 ---
 
@@ -264,8 +281,9 @@ profile_completeness, career_history (JSON), education (JSON)
 ```
 Prism/
 │
-├── main.py                  # FastAPI app — all API routes
-├── config.py                # Settings, API keys, weight defaults
+├── backend/                 # FastAPI Backend Engine
+│   ├── main.py              # FastAPI app — all API routes
+│   ├── config.py            # Settings, API keys, weight defaults
 ├── database.py              # SQLite — all DB operations
 ├── models.py                # Pydantic request / response schemas
 ├── ranker.py                # Master pipeline orchestrator
@@ -296,9 +314,20 @@ Prism/
 ├── data/
 │   └── candidates.csv       # Challenge dataset
 │
-├── requirements.txt
-├── .env.example
-└── README.md
+├── frontend/                # React Vite Frontend Application
+│   ├── src/
+│   │   ├── api/             # Axios client for communicating with backend
+│   │   ├── components/      # Reusable UI components (Sidebar, LoadingPipeline, etc)
+│   │   ├── context/         # Auth and state management
+│   │   ├── pages/           # Page views (Landing, Auth, Dashboard, Candidate Portal)
+│   │   ├── App.jsx          # Main application routing
+│   │   └── index.css        # Tailwind global styles
+│   ├── public/              # Static assets (logo, etc)
+│   ├── package.json         # NPM dependencies
+│   ├── tailwind.config.js   # Tailwind UI configuration
+│   └── vite.config.js       # Vite bundler config
+│
+├── README.md
 ```
 
 ---
@@ -307,12 +336,13 @@ Prism/
 
 | Component | Technology | Why |
 |---|---|---|
+| Frontend Web App | React + Vite + TailwindCSS | Lightning fast, component-based, modern styling |
 | API Server | FastAPI + Uvicorn | Async, lightning fast, auto-docs |
 | LLM | NVIDIA NIM LLaMA 3.1 70B | JD parsing, explanations, outreach |
 | Embeddings | sentence-transformers (local) | Zero API cost, 384-dim vectors |
 | Vector DB | ChromaDB | Local, persistent, zero infra needed |
 | Database | SQLite | Lightweight, zero config, single file |
-| Language | Python 3.11 | Full ecosystem compatibility |
+| Language | Python 3.11 & JavaScript | Full ecosystem compatibility |
 
 ---
 
@@ -366,8 +396,9 @@ Research shows AI tools ignoring behavioral signals produce significantly higher
 
 ## 🔮 Roadmap
 
-- [ ] React dashboard with skill gap heatmap
-- [ ] PDF resume parsing
+- [x] React dashboard with skill gap heatmap
+- [x] PDF resume parsing
+- [x] Multi-signal weighting
 - [ ] Multi-JD batch ranking
 - [ ] Candidate comparison side-by-side view
 - [ ] ATS integrations (Greenhouse, Lever, Workday)
