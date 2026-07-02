@@ -4,20 +4,19 @@ All other modules import embed_text / embed_batch from here.
 Model runs 100% locally — no API call, no cost, no latency.
 """
 
-from sentence_transformers import SentenceTransformer
+from fastembed import TextEmbedding
 from config import EMBEDDING_MODEL
-import numpy as np
 from typing import List
 
-print(f"[Embedder] Loading model '{EMBEDDING_MODEL}' … (first run downloads ~80 MB)")
-_model = SentenceTransformer(EMBEDDING_MODEL)
+print(f"[Embedder] Loading fastembed model 'sentence-transformers/all-MiniLM-L6-v2' … (low memory ONNX mode)")
+_model = TextEmbedding(model_name="sentence-transformers/all-MiniLM-L6-v2")
 print("[Embedder] Model ready.")
 
 
 def embed_text(text: str) -> List[float]:
     """Convert a single string to a vector (list of floats)."""
-    vec = _model.encode(text, convert_to_numpy=True, normalize_embeddings=True)
-    return vec.tolist()
+    vecs = list(_model.embed([text]))
+    return vecs[0].tolist()
 
 
 def embed_batch(texts: List[str], batch_size: int = 64) -> List[List[float]]:
@@ -25,14 +24,9 @@ def embed_batch(texts: List[str], batch_size: int = 64) -> List[List[float]]:
     Convert a list of strings to vectors efficiently.
     Uses batching — 10x faster than calling embed_text in a loop.
     """
-    vecs = _model.encode(
-        texts,
-        batch_size=batch_size,
-        convert_to_numpy=True,
-        normalize_embeddings=True,
-        show_progress_bar=True,
-    )
-    return vecs.tolist()
+    vecs = list(_model.embed(texts, batch_size=batch_size))
+    return [v.tolist() for v in vecs]
+
 
 
 def build_candidate_profile_text(candidate: dict) -> str:
