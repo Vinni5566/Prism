@@ -19,6 +19,10 @@ SYSTEM_PROMPT = """You are a precise job description parser for a recruitment AI
 Extract structured information from job descriptions and return ONLY valid JSON.
 No preamble, no explanation, no markdown code blocks — just the raw JSON object."""
 
+BIAS_SYSTEM_PROMPT = """You are an expert DEI (Diversity, Equity, and Inclusion) recruitment analyst.
+Your job is to scan job descriptions for potentially exclusionary, biased, or overly aggressive language, and suggest inclusive alternatives.
+Return ONLY valid JSON. No preamble, no explanation, no markdown code blocks."""
+
 USER_PROMPT_TEMPLATE = """Parse this job description and return a JSON object with EXACTLY these keys:
 
 {{
@@ -115,3 +119,49 @@ def _empty_jd() -> Dict:
         "suggested_weight_bias": "balanced",
         "domain_keywords":       [],
     }
+
+
+def scan_jd_bias(jd_text: str) -> Dict:
+    """
+    Scan a job description for biased or exclusionary language.
+    """
+    if not jd_text or not jd_text.strip():
+        return {"flags": [], "score": 100}
+
+    prompt = f"""Scan this job description for biased, exclusionary, gendered, or aggressive language (e.g., 'rockstar', 'ninja', 'digital native', 'aggressive', 'guys').
+Return a JSON object with this exact structure:
+{{
+  "flags": [
+    {{
+      "phrase": "the problematic phrase",
+      "reason": "why it's biased or exclusionary",
+      "suggestion": "a better, inclusive alternative"
+    }}
+  ],
+  "score": 85,
+  "fixed_jd": "The full original job description but with all biased phrases replaced by their inclusive alternatives. Keep the rest of the text exactly the same."
+}}
+
+JOB DESCRIPTION:
+{jd_text}"""
+
+    try:
+        response = _client.chat.completions.create(
+            model=NVIDIA_MODEL,
+            messages=[
+                {"role": "system", "content": BIAS_SYSTEM_PROMPT},
+                {"role": "user",   "content": prompt},
+            ],
+            temperature=0.1,
+            max_tokens=1000,
+        )
+
+        raw = response.choices[0].message.content.strip()
+        raw = re.sub(r"^```(?:json)?\s*", "", raw)
+        raw = re.sub(r"\s*```$", "", raw)
+        
+        parsed = json.loads(raw)
+        return parsed
+    except Exception as e:
+        print(f"[JDParser] Bias scan error: {e}")
+        return {"flags": [], "score": 100}

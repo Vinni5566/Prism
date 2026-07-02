@@ -1,6 +1,6 @@
 import React, { useRef, useState } from 'react';
 import { Sparkles, AlertCircle, FileText, Upload, Check, Trash2, HelpCircle } from 'lucide-react';
-import { analyzeJd, analyzeJdFile } from '../api/client';
+import { analyzeJd, analyzeJdFile, scanJdBias } from '../api/client';
 
 const PLACEHOLDER = `Paste a job description here. Prism will understand the role, extract required skills, detect seniority and domain, then rank candidates intelligently.
 
@@ -13,6 +13,9 @@ export default function JDInput({ value, onChange, onJdAnalyzed, parsedJd, onCle
   const [localLoading, setLocalLoading] = useState(false);
   const [error, setError] = useState('');
   const fileInputRef = useRef(null);
+  
+  const [biasResult, setBiasResult] = useState(null);
+  const [scanningBias, setScanningBias] = useState(false);
 
   const charCount = value.length;
   const isValid = charCount >= 50;
@@ -254,22 +257,106 @@ export default function JDInput({ value, onChange, onJdAnalyzed, parsedJd, onCle
 
       {/* Action Buttons */}
       {!parsedJd && (
-        <button
-          onClick={handleTextAnalyze}
-          disabled={!isValid || isLoading || localLoading || disabled}
-          className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {localLoading ? (
+        <div className="space-y-2">
+          <button
+            type="button"
+            onClick={handleTextAnalyze}
+            disabled={!isValid || isLoading || localLoading || disabled || scanningBias}
+            className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {localLoading ? (
+              <>
+                <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                Parsing Requirements…
+              </>
+            ) : (
+              <>
+                <Sparkles size={14} /> Analyze Job Description
+              </>
+            )}
+          </button>
+          
+          {activeTab === 'text' && !biasResult && (
+            <button
+              onClick={async () => {
+                if (!isValid) return;
+                setScanningBias(true);
+                try {
+                  const res = await scanJdBias(value);
+                  setBiasResult(res);
+                } catch (err) {
+                  console.error(err);
+                } finally {
+                  setScanningBias(false);
+                }
+              }}
+              disabled={!isValid || scanningBias || localLoading}
+              className="w-full flex items-center justify-center gap-2 py-2 text-xs text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {scanningBias ? 'Scanning...' : 'Scan for JD Bias & Exclusionary Language'}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* Bias Scanner Results */}
+      {biasResult && !parsedJd && (
+        <div className="bg-rose-950/30 border border-rose-500/20 rounded-xl p-4 mt-4 animate-fadeIn">
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-xs font-bold text-rose-400 flex items-center gap-1.5">
+              <AlertCircle size={14} /> DEI Bias Scan Results
+            </h4>
+            <span className={`text-[10px] px-2 py-0.5 rounded font-bold ${biasResult.score >= 90 ? 'bg-teal-500/20 text-teal-400' : biasResult.score >= 70 ? 'bg-amber-500/20 text-amber-400' : 'bg-rose-500/20 text-rose-400'}`}>
+              Score: {biasResult.score}/100
+            </span>
+          </div>
+          
+          {biasResult.flags && biasResult.flags.length > 0 ? (
             <>
-              <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-              Parsing Requirements…
+              <div className="space-y-3">
+                {biasResult.flags.map((flag, idx) => (
+                  <div key={idx} className="bg-slate-900/50 rounded-lg p-3 text-xs border border-rose-500/10">
+                    <div className="flex gap-2 items-start mb-1">
+                      <span className="text-rose-400 font-semibold line-through decoration-rose-500/50">"{flag.phrase}"</span>
+                      <span className="text-slate-500">→</span>
+                      <span className="text-teal-400 font-semibold">{flag.suggestion}</span>
+                    </div>
+                    <p className="text-slate-400 text-[10px] mt-1">{flag.reason}</p>
+                  </div>
+                ))}
+              </div>
+              
+              {biasResult.fixed_jd && (
+                <div className="mt-4 pt-4 border-t border-rose-500/20">
+                  <h4 className="text-xs font-bold text-teal-400 mb-2 flex items-center gap-1.5">
+                    <Sparkles size={14} /> Unbiased Version (Ready to use)
+                  </h4>
+                  <div className="relative group">
+                    <textarea
+                      readOnly
+                      value={biasResult.fixed_jd}
+                      className="w-full bg-slate-900/80 border border-teal-500/20 rounded-lg p-3 text-[10px] font-mono text-slate-300 resize-none h-32 focus:outline-none"
+                    />
+                    <button 
+                      onClick={() => {
+                        onChange(biasResult.fixed_jd);
+                        setBiasResult(null);
+                      }}
+                      className="absolute top-2 right-2 bg-teal-500 hover:bg-teal-400 text-slate-950 font-bold px-3 py-1.5 rounded text-[10px] transition-colors shadow-lg opacity-0 group-hover:opacity-100 flex items-center gap-1"
+                    >
+                      <Check size={12} /> Replace & Use This
+                    </button>
+                  </div>
+                </div>
+              )}
             </>
           ) : (
-            <>
-              <Sparkles size={14} /> Analyze Job Description
-            </>
+            <p className="text-xs text-teal-400 bg-teal-500/10 p-2 rounded-lg border border-teal-500/20">
+              <Check size={12} className="inline mr-1" />
+              Great job! No biased or exclusionary language detected.
+            </p>
           )}
-        </button>
+        </div>
       )}
     </div>
   );

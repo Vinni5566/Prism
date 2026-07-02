@@ -7,7 +7,7 @@ import PrismViz from './PrismViz';
 import BehaviorSignals from './BehaviorSignals';
 import CareerTimeline from './CareerTimeline';
 import FeedbackPanel from './FeedbackPanel';
-import { getCandidateById } from '../api/client';
+import { getCandidateById, getInterviewQuestions } from '../api/client';
 import {
   normalizeScore, getFitLabel, getFitClass,
   initials, formatYears, truncate, copyToClipboard,
@@ -36,10 +36,12 @@ function ScoreBar({ label, value, color }) {
   );
 }
 
-export default function CandidateCard({ candidate, rank, runId, onFeedbackGiven, isComparing, onToggleCompare, onOpenOutreach }) {
+export default function CandidateCard({ candidate, rank, runId, parsedJd, onFeedbackGiven, isComparing, onToggleCompare, onOpenOutreach }) {
   const [expanded, setExpanded] = useState(rank === 1);
   const [fullProfile, setFullProfile] = useState(null);
   const [loadingProfile, setLoadingProfile] = useState(false);
+  const [interviewQuestions, setInterviewQuestions] = useState(null);
+  const [loadingQuestions, setLoadingQuestions] = useState(false);
 
   const {
     candidate_id, name, email,
@@ -94,10 +96,8 @@ export default function CandidateCard({ candidate, rank, runId, onFeedbackGiven,
         <div className="flex items-start gap-4">
           {/* Rank + Avatar */}
           <div className="flex-shrink-0 flex flex-col items-center gap-1.5">
-            <div className="rank-badge text-white">
-              {rank <= 3
-                ? rank === 1 ? '🥇' : rank === 2 ? '🥈' : '🥉'
-                : `#${rank}`}
+            <div className="rank-badge text-white font-bold">
+              #{rank}
             </div>
             {/* Avatar circle */}
             <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold text-white"
@@ -142,10 +142,37 @@ export default function CandidateCard({ candidate, rank, runId, onFeedbackGiven,
               </div>
             </div>
 
+            {/* Candidate DNA Signature / Heatmap */}
+            <div className="mt-3 flex items-center gap-1.5" title="Candidate DNA Signature">
+              <span className="text-[9px] font-mono text-slate-500 uppercase tracking-widest mr-1">DNA</span>
+              {Object.keys(score_breakdown || {}).length > 0 ? (
+                Object.entries(score_breakdown || {}).map(([key, val]) => {
+                  const opacityVal = normalizeScore(val ?? 0) / 100;
+                  const safeOpacity = isNaN(opacityVal) ? 0.2 : Math.max(0.2, Math.min(1, opacityVal));
+                  return (
+                    <div
+                      key={`dna-${key}`}
+                      className="h-1.5 flex-1 rounded-sm transition-all hover:h-2"
+                      style={{
+                        backgroundColor: SIGNAL_COLORS[key] || '#14b8a6',
+                        opacity: safeOpacity,
+                      }}
+                    />
+                  );
+                })
+              ) : (
+                <>
+                  {[1, 2, 3, 4, 5].map(i => (
+                    <div key={`dna-empty-${i}`} className="h-1.5 flex-1 rounded-sm bg-slate-800" />
+                  ))}
+                </>
+              )}
+            </div>
+
             {/* Score bars (always shown) */}
-            {Object.keys(score_breakdown).length > 0 && (
+            {Object.keys(score_breakdown || {}).length > 0 && (
               <div className="mt-3 grid grid-cols-5 gap-2">
-                {Object.entries(score_breakdown).slice(0, 5).map(([key, val]) => (
+                {Object.entries(score_breakdown || {}).slice(0, 5).map(([key, val]) => (
                   <ScoreBar key={key} label={SIGNAL_LABELS[key] || key} value={val} color={SIGNAL_COLORS[key] || '#14b8a6'}/>
                 ))}
               </div>
@@ -264,6 +291,51 @@ export default function CandidateCard({ candidate, rank, runId, onFeedbackGiven,
                   Generate Personalized Outreach
                 </button>
               )}
+
+              {/* Interview Question Generator */}
+              <div className="bg-slate-900/30 border border-white/5 rounded-2xl p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="section-header text-sm flex items-center gap-1.5 m-0 border-0 pb-0">
+                    <Sparkles size={13} className="text-amber-400" /> Interviewer Guide
+                  </div>
+                  {!interviewQuestions && (
+                    <button 
+                      onClick={async () => {
+                        if (!parsedJd) return;
+                        setLoadingQuestions(true);
+                        try {
+                          const res = await getInterviewQuestions(candidate_id, parsedJd);
+                          setInterviewQuestions(res.questions);
+                        } catch (err) {
+                          console.error(err);
+                        } finally {
+                          setLoadingQuestions(false);
+                        }
+                      }}
+                      disabled={loadingQuestions || !parsedJd}
+                      className="text-[10px] bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 px-2.5 py-1 rounded-md border border-amber-500/20 transition-colors disabled:opacity-50"
+                    >
+                      {loadingQuestions ? 'Generating...' : 'Auto-Generate Qs'}
+                    </button>
+                  )}
+                </div>
+                
+                {interviewQuestions ? (
+                  <div className="space-y-2 text-xs text-slate-300">
+                    {interviewQuestions.split('\n').filter(q => q.trim()).map((q, idx) => (
+                      <div key={idx} className="bg-slate-800/40 p-2.5 rounded-lg border border-slate-700/50">
+                        {q}
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-500">
+                    {!parsedJd 
+                      ? "Analyze a Job Description first to generate targeted interview questions for this candidate."
+                      : "Generate AI interview questions specifically targeting the gap between this candidate's skills and the JD."}
+                  </p>
+                )}
+              </div>
 
               {/* Email link */}
               {email && (

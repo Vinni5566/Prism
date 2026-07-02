@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Clock, ChevronDown, ChevronUp, Download, RefreshCw, Play, History } from 'lucide-react';
-import { getRuns, getRunResults } from '../api/client';
+import { Clock, ChevronDown, ChevronUp, Download, RefreshCw, Play, History, Trash2 } from 'lucide-react';
+import { getRuns, getRunResults, clearRuns } from '../api/client';
 import { downloadExport } from '../api/client';
 import CandidateCard from '../components/CandidateCard';
 
@@ -184,7 +184,21 @@ function RunRow({ run, index }) {
 export default function RunHistory() {
   const [runs, setRuns] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [clearing, setClearing] = useState(false);
   const [error, setError] = useState('');
+
+  const handleClear = async () => {
+    if (!window.confirm("Are you sure you want to clear all run history? This cannot be undone.")) return;
+    setClearing(true);
+    try {
+      await clearRuns();
+      setRuns([]);
+    } catch (e) {
+      setError(e?.response?.data?.detail || e.message || 'Failed to clear runs');
+    } finally {
+      setClearing(false);
+    }
+  };
 
   const load = async () => {
     setLoading(true);
@@ -214,11 +228,20 @@ export default function RunHistory() {
             All past ranking runs — expand to see results and download CSVs
           </p>
         </div>
-        <button onClick={load} disabled={loading}
-                className="btn-secondary flex items-center gap-2 text-xs px-3 py-2 disabled:opacity-50">
-          <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
-          Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          {runs.length > 0 && (
+            <button onClick={handleClear} disabled={loading || clearing}
+                    className="flex items-center gap-2 text-xs px-3 py-2 rounded-lg text-rose-400 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 transition-colors disabled:opacity-50">
+              <Trash2 size={12} className={clearing ? 'animate-pulse' : ''} />
+              Clear History
+            </button>
+          )}
+          <button onClick={load} disabled={loading || clearing}
+                  className="btn-secondary flex items-center gap-2 text-xs px-3 py-2 disabled:opacity-50">
+            <RefreshCw size={12} className={loading ? 'animate-spin' : ''} />
+            Refresh
+          </button>
+        </div>
       </div>
 
       {/* Content */}

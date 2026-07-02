@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 
-export default function Sidebar({ activePage, onPageChange }) {
+export default function Sidebar({ activePage, onPageChange, onNavigate }) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const { user, logout } = useAuth();
 
@@ -23,43 +23,33 @@ export default function Sidebar({ activePage, onPageChange }) {
     <motion.aside
       animate={{ width: isCollapsed ? '72px' : '260px' }}
       transition={{ duration: 0.3, ease: 'easeInOut' }}
-      className="sticky top-0 h-screen glass border-r border-white/5 flex flex-col justify-between z-40"
+      className="sticky top-0 h-screen glass border-r border-white/5 flex flex-col justify-between z-40 overflow-visible"
     >
       <div>
         {/* Logo / Header */}
-        <div className="h-16 flex items-center justify-between px-4 border-b border-white/5">
-          <AnimatePresence>
+        <div className={`h-[72px] flex items-center px-4 border-b border-white/5 relative`}>
+          {/* Clickable Logo */}
+          <div
+            className="flex items-center gap-3 overflow-hidden cursor-pointer group flex-1"
+            onClick={() => onNavigate?.('landing')}
+          >
+            <img src="/logo.jpg" alt="Prism Logo" className="w-7 h-7 object-contain flex-shrink-0 shadow-lg rounded-md group-hover:opacity-80 transition-opacity" />
             {!isCollapsed && (
-              <motion.div
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                exit={{ opacity: 0, x: -10 }}
-                className="flex items-center gap-2"
-              >
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold">
-                  <img src="/logo.jpg" alt="Prism Logo" className="w-full h-full object-cover rounded-lg" />
-                </div>
-                <div>
-                  <h2 className="text-sm font-bold text-slate-100 leading-none">Prism AI</h2>
-                  <span className="text-[10px] text-slate-500 uppercase tracking-widest font-mono">RECRUITER</span>
-                </div>
+              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex-shrink-0 whitespace-nowrap">
+                <div className="text-lg font-black gradient-text leading-none mb-0.5 group-hover:opacity-80 transition-opacity">Prism</div>
+                <div className="text-[9px] text-slate-500 font-mono leading-none tracking-widest">AI RECRUITER</div>
               </motion.div>
             )}
-          </AnimatePresence>
-
-          {isCollapsed && (
-            <div className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold mx-auto">
-              <img src="/logo.jpg" alt="Prism Logo" className="w-full h-full object-cover rounded-lg" />
-            </div>
-          )}
-
-          <button
-            onClick={() => setIsCollapsed(!isCollapsed)}
-            className="p-1 rounded-lg text-slate-500 hover:text-slate-200 hover:bg-white/5 transition-all ml-auto hidden sm:block"
-          >
-            {isCollapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
-          </button>
+          </div>
         </div>
+
+        {/* Collapse Toggle — positioned outside header to avoid clip */}
+        <button
+          onClick={() => setIsCollapsed(!isCollapsed)}
+          className="absolute -right-3.5 top-[52px] w-7 h-7 rounded-full bg-slate-800 border border-white/10 shadow-lg flex items-center justify-center text-slate-400 hover:text-white hover:bg-slate-700 transition-all hidden sm:flex z-50"
+        >
+          {isCollapsed ? <ChevronRight size={13} /> : <ChevronLeft size={13} />}
+        </button>
 
         {/* User Card */}
         <div className="p-4 border-b border-white/5">

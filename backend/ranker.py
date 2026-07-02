@@ -157,7 +157,6 @@ async def rank_candidates(
         candidates  = [x["candidate"]  for x in explain_batch],
         score_dicts = [x["score_dict"] for x in explain_batch],
         jd_parsed   = jd_parsed,
-        concurrency = 5,
     )
     for item, explanation in zip(explain_batch, explanations):
         item["score_dict"]["explanation"] = explanation
@@ -168,7 +167,6 @@ async def rank_candidates(
     outreach_messages = await batch_outreach(
         candidates = [x["candidate"] for x in outreach_batch],
         jd_parsed  = jd_parsed,
-        concurrency = 3,
     )
     for item, msg in zip(outreach_batch, outreach_messages):
         item["score_dict"]["outreach_msg"] = msg

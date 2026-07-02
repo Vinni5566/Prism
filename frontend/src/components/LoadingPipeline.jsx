@@ -1,4 +1,5 @@
 import React from 'react';
+import { motion } from 'framer-motion';
 import { Cpu, Database, Activity, Zap } from 'lucide-react';
 
 const STEPS = [

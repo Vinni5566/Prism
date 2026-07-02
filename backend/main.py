@@ -309,8 +309,19 @@ def analytics():
 def list_runs(limit: int = 50):
     """List all past ranking runs (most recent first)."""
     try:
+        from database import list_jd_runs
         runs = list_jd_runs(limit=limit)
         return {"total": len(runs), "runs": runs}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/runs")
+def clear_runs():
+    """Clear all past ranking runs."""
+    try:
+        from database import clear_all_runs
+        clear_all_runs()
+        return {"status": "success", "message": "All runs cleared"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -468,6 +479,35 @@ def search_candidates_api(q: str, limit: int = 50):
                 cand["similarity_score"] = r["similarity"]
                 results.append(cand)
         return results
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class InterviewQRequest(BaseModel):
+    parsed_jd: dict
+
+@app.post("/candidates/{candidate_id}/interview-questions")
+async def get_interview_questions(candidate_id: str, request: InterviewQRequest):
+    """Generate targeted interview questions based on the JD and candidate profile."""
+    try:
+        from explainer import generate_interview_questions
+        from database import get_candidate
+        
+        cand = get_candidate(candidate_id)
+        if not cand:
+            raise HTTPException(status_code=404, detail="Candidate not found")
+            
+        questions = await generate_interview_questions(cand, request.parsed_jd)
+        return {"questions": questions}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/jd/bias-scan")
+def scan_jd_for_bias(request: JDAnalyzeRequest):
+    """Scan JD for biased/exclusionary language."""
+    try:
+        from jd_parser import scan_jd_bias
+        return scan_jd_bias(request.jd_text)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

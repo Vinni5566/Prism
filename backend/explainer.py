@@ -21,6 +21,8 @@ EXPLAIN_SYSTEM = (
 )
 
 EXPLAIN_PROMPT = """A candidate has been ranked for a job opening. Write EXACTLY 2 sentences:
+If their composite score is below 50, frame this as a 'Why Not?' rejection explaining exactly what they lack.
+If their composite score is 50 or above, frame this as a match summary:
 - Sentence 1: The strongest reason this candidate ranked here (be specific — mention actual skills, companies, or career facts)
 - Sentence 2: The main gap or caveat the recruiter should be aware of
 
@@ -67,6 +69,25 @@ Top Skills: {skills}
 Write only the 3-sentence message. No subject line, no sign-off."""
 
 
+INTERVIEW_Q_SYSTEM = (
+    "You are an expert technical interviewer. Generate highly targeted, non-generic interview questions."
+)
+
+INTERVIEW_Q_PROMPT = """Based on the job description and the candidate's specific profile, generate EXACTLY 3 targeted interview questions to ask this candidate.
+Focus on bridging the gap between their experience and the role's requirements. Avoid generic questions like 'Tell me about a time...'.
+
+Job Title: {job_title}
+Required Skills: {required_skills}
+
+Candidate Name: {name}
+Candidate Skills: {skills}
+Candidate Experience: {years_experience} years
+Current Role: {current_title}
+
+Return ONLY the 3 questions, numbered 1, 2, and 3. Do not include any intro or outro text."""
+
+
+
 async def generate_explanation(candidate: Dict, score_dict: Dict, jd_parsed: Dict) -> str:
     """Generate a 2-sentence explanation for one candidate asynchronously."""
     skills_str = ", ".join(
@@ -107,6 +128,22 @@ async def generate_outreach(candidate: Dict, jd_parsed: Dict) -> str:
     )
     return await _call_llm(OUTREACH_SYSTEM, prompt, max_tokens=200)
 
+async def generate_interview_questions(candidate: Dict, jd_parsed: Dict) -> str:
+    """Generate 3 targeted interview questions for one candidate."""
+    skills_str = ", ".join(
+        str(s) for s in (candidate.get("skills") or [])[:8]
+    )
+    required_skills = ", ".join(jd_parsed.get("required_skills", [])[:8])
+    prompt = INTERVIEW_Q_PROMPT.format(
+        job_title       = jd_parsed.get("job_title", "the role"),
+        required_skills = required_skills,
+        name            = candidate.get("name", "Candidate"),
+        skills          = skills_str,
+        years_experience= candidate.get("years_experience", 0),
+        current_title   = candidate.get("current_title", ""),
+    )
+    return await _call_llm(INTERVIEW_Q_SYSTEM, prompt, max_tokens=250)
+
 
 async def batch_explain(
     candidates:  list,
@@ -132,7 +169,7 @@ async def batch_explain(
     return await asyncio.gather(*tasks)
 
 
-async def batch_outreach(candidates: list, jd_parsed: Dict, concurrency: int = 3) -> list:
+async def batch_outreach(candidates: list, jd_parsed: Dict, concurrency: int = 5) -> list:
     """Generate outreach for multiple candidates concurrently."""
     semaphore = asyncio.Semaphore(concurrency)
 

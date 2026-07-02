@@ -59,6 +59,160 @@ const CustomTooltip = ({ active, payload, label }) => {
   );
 };
 
+// ── Custom Colorful Pentagon Radar ────────────────────────────────────────────
+function ColorfulRadar({ data, dims }) {
+  const [hovered, setHovered] = useState(null);
+  const cx = 160, cy = 155, R = 110;
+  const N = data.length;
+
+  // Vertex positions for each axis
+  const vertices = data.map((_, i) => {
+    const angle = (Math.PI * 2 * i) / N - Math.PI / 2;
+    return { x: cx + R * Math.cos(angle), y: cy + R * Math.sin(angle) };
+  });
+
+  // Point on radar polygon for a value 0-100
+  const point = (i, val) => {
+    const angle = (Math.PI * 2 * i) / N - Math.PI / 2;
+    const r = (val / 100) * R;
+    return { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) };
+  };
+
+  // Grid rings
+  const rings = [20, 40, 60, 80, 100];
+
+  // Build filled polygon path for each individual axis (triangle from center to 2 grid edges)
+  const polyPath = pts => pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.x},${p.y}`).join(' ') + 'Z';
+
+  // Score polygon points
+  const scorePoints = data.map((d, i) => point(i, d.value));
+  const scorePath = polyPath(scorePoints);
+
+  return (
+    <div className="flex flex-col items-center gap-4">
+      <svg width="320" height="310" viewBox="0 0 320 310">
+        <defs>
+          {dims.map(d => (
+            <radialGradient key={d.key} id={`glow-${d.key}`} cx="50%" cy="50%" r="50%">
+              <stop offset="0%" stopColor={d.color} stopOpacity="0.5" />
+              <stop offset="100%" stopColor={d.color} stopOpacity="0" />
+            </radialGradient>
+          ))}
+          <filter id="glow-filter">
+            <feGaussianBlur stdDeviation="3" result="blur" />
+            <feMerge><feMergeNode in="blur" /><feMergeNode in="SourceGraphic" /></feMerge>
+          </filter>
+        </defs>
+
+        {/* Grid rings */}
+        {rings.map(ring => (
+          <polygon key={ring}
+            points={vertices.map((_, i) => { const p = point(i, ring); return `${p.x},${p.y}`; }).join(' ')}
+            fill="none" stroke="rgba(255,255,255,0.05)" strokeWidth="1"
+          />
+        ))}
+
+        {/* Axis lines, one per dimension with matching color */}
+        {vertices.map((v, i) => (
+          <line key={i} x1={cx} y1={cy} x2={v.x} y2={v.y}
+            stroke={dims[i].color} strokeWidth="1" strokeOpacity="0.25"
+          />
+        ))}
+
+        {/* Colored glow sectors — one per dimension */}
+        {data.map((d, i) => {
+          const next = (i + 1) % N;
+          const p0 = point(i, d.value);
+          const p1 = point(next, data[next].value);
+          return (
+            <polygon key={i}
+              points={`${cx},${cy} ${p0.x},${p0.y} ${p1.x},${p1.y}`}
+              fill={dims[i].color}
+              fillOpacity={hovered === i ? 0.35 : 0.15}
+              stroke={dims[i].color}
+              strokeWidth={hovered === i ? 2 : 1}
+              strokeOpacity={hovered === i ? 0.9 : 0.4}
+              className="transition-all duration-200 cursor-pointer"
+              onMouseEnter={() => setHovered(i)}
+              onMouseLeave={() => setHovered(null)}
+            />
+          );
+        })}
+
+        {/* Outer score polygon outline */}
+        <path d={scorePath} fill="none" stroke="rgba(255,255,255,0.2)" strokeWidth="1.5" strokeDasharray="4 3" />
+
+        {/* Score dots at each vertex */}
+        {scorePoints.map((p, i) => (
+          <g key={i} onMouseEnter={() => setHovered(i)} onMouseLeave={() => setHovered(null)} className="cursor-pointer">
+            <circle cx={p.x} cy={p.y} r={hovered === i ? 8 : 5}
+              fill={dims[i].color} fillOpacity={hovered === i ? 1 : 0.85}
+              stroke="rgba(0,0,0,0.5)" strokeWidth="1.5"
+              filter={hovered === i ? 'url(#glow-filter)' : undefined}
+              className="transition-all duration-200"
+            />
+          </g>
+        ))}
+
+        {/* Axis Labels */}
+        {vertices.map((v, i) => {
+          const offsetX = v.x > cx + 5 ? 20 : v.x < cx - 5 ? -20 : 0;
+          const offsetY = v.y > cy + 5 ? 18 : v.y < cy - 5 ? -18 : 0;
+          return (
+            <g key={i} onMouseEnter={() => setHovered(i)} onMouseLeave={() => setHovered(null)} className="cursor-pointer">
+              <text
+                x={v.x + offsetX} y={v.y + offsetY}
+                textAnchor="middle" dominantBaseline="middle"
+                fontSize={hovered === i ? 13 : 11}
+                fontWeight={hovered === i ? 700 : 500}
+                fill={hovered === i ? dims[i].color : '#94a3b8'}
+                className="transition-all duration-200 select-none"
+              >
+                {data[i].subject}
+              </text>
+              {hovered === i && (
+                <text
+                  x={v.x + offsetX} y={v.y + offsetY + 14}
+                  textAnchor="middle" fontSize={10} fontWeight={700}
+                  fill={dims[i].color} className="select-none"
+                >
+                  {data[i].value}
+                </text>
+              )}
+            </g>
+          );
+        })}
+
+        {/* Center label */}
+        <text x={cx} y={cy - 6} textAnchor="middle" fontSize={18} fontWeight={800} fill="white" fillOpacity={0.9}>
+          {Math.round(data.reduce((s, d) => s + d.value, 0) / data.length)}
+        </text>
+        <text x={cx} y={cy + 10} textAnchor="middle" fontSize={8} fill="#64748b" fontWeight={500} letterSpacing="1">
+          AVG SCORE
+        </text>
+      </svg>
+
+      {/* Legend row */}
+      <div className="flex flex-wrap justify-center gap-x-5 gap-y-2">
+        {dims.map((d, i) => (
+          <button
+            key={d.key}
+            onMouseEnter={() => setHovered(i)}
+            onMouseLeave={() => setHovered(null)}
+            className={`flex items-center gap-2 text-xs font-medium transition-all duration-200 ${hovered === i ? 'opacity-100' : 'opacity-60 hover:opacity-90'}`}
+          >
+            <div className="w-2.5 h-2.5 rounded-full shadow-lg" style={{ background: d.color, boxShadow: hovered === i ? `0 0 8px ${d.color}` : 'none' }} />
+            <span style={{ color: hovered === i ? d.color : '#94a3b8' }}>{d.label}</span>
+            <span className="font-mono text-[10px]" style={{ color: dims[i].color, opacity: 0.8 }}>
+              {data[i].value}
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function AnalyticsDashboard() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -204,39 +358,13 @@ export default function AnalyticsDashboard() {
           )}
         </div>
 
-        {/* 5D Radar Chart */}
+        {/* 5D Radar Chart — Custom Colorful SVG */}
         <div className="glass rounded-2xl p-5">
           <div className="section-header mb-4">
             <Zap size={16} className="text-purple-400" />
             5D Score Dimensions (Pool Avg.)
           </div>
-          <ResponsiveContainer width="100%" height={240}>
-            <RadarChart cx="50%" cy="50%" outerRadius="70%" data={radarData}>
-              <PolarGrid stroke="rgba(255,255,255,0.06)" />
-              <PolarAngleAxis
-                dataKey="subject"
-                tick={{ fontSize: 11, fill: '#94a3b8', fontWeight: 500 }}
-              />
-              <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} axisLine={false} />
-              <Radar
-                name="Avg Score"
-                dataKey="value"
-                stroke="#14b8a6"
-                fill="#14b8a6"
-                fillOpacity={0.15}
-                strokeWidth={2}
-              />
-              <Tooltip content={<CustomTooltip />} />
-            </RadarChart>
-          </ResponsiveContainer>
-          <div className="flex flex-wrap justify-center gap-3 mt-1">
-            {SCORE_DIMS.map(d => (
-              <div key={d.key} className="flex items-center gap-1.5 text-[10px] text-slate-400">
-                <div className="w-2 h-2 rounded-full" style={{ background: d.color }} />
-                {d.label}
-              </div>
-            ))}
-          </div>
+          <ColorfulRadar data={radarData} dims={SCORE_DIMS} />
         </div>
       </div>
 

@@ -358,7 +358,7 @@ export default function CandidatePool({ candidates, onRefresh, isLoading }) {
                     )}
                   </div>
                 </div>
-                <div className="hidden md:flex flex-wrap gap-1 max-w-xs justify-end">
+                <div className="hidden md:flex flex-wrap content-start gap-1 w-64 flex-shrink-0">
                   {(c.skills || []).slice(0, 4).map(s => (
                     <span key={s} className="skill-tag text-[9px] px-2 py-0.5">{s}</span>
                   ))}

@@ -107,7 +107,7 @@ export default function WeightSliders({ weights, onChange }) {
       </div>
 
       {/* Normalized preview */}
-      <div className="text-[10px] text-slate-600 font-mono">
+      <div className="text-[10px] text-slate-600 font-mono break-words whitespace-normal">
         Backend: {Object.entries(normalized).map(([k, v]) => `${k}=${v}`).join(' · ')}
       </div>
     </div>
