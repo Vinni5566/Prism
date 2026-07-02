@@ -9,11 +9,11 @@ export default function SkillHeatmap({ results, requiredSkills }) {
   const getCell = (candidate, skillName) => {
     const gapArr = candidate.skill_gap;
     if (!Array.isArray(gapArr)) return 'missing';
-    const item = gapArr.find(g => g.skill?.toLowerCase() === skillName.toLowerCase());
+    const item = gapArr.find(g => typeof g?.skill === 'string' && typeof skillName === 'string' && g.skill.toLowerCase() === skillName.toLowerCase());
     if (!item) {
       // Fallback: check candidate skills list
       const has = (candidate.skills || []).some(s =>
-        s.toLowerCase().includes(skillName.toLowerCase())
+        typeof s === 'string' && typeof skillName === 'string' && s.toLowerCase().includes(skillName.toLowerCase())
       );
       return has ? 'full' : 'missing';
     }

@@ -33,9 +33,9 @@ DEFAULT_WEIGHTS = {
 
 # ── Ranking config ─────────────────────────────────────────────────────────────
 TOP_N_SEMANTIC      = 100   # candidates retrieved from vector search
-TOP_N_FINAL         = 5    # candidates in final shortlist
-TOP_N_EXPLAIN       = 3    # how many get Claude explanation
-TOP_N_OUTREACH      = 5     # how many get outreach message draft
+TOP_N_FINAL         = 100    # candidates in final shortlist
+TOP_N_EXPLAIN       = 5     # how many get AI explanation
+TOP_N_OUTREACH      = 3     # how many get outreach message draft
 
 # ── Behavioral score decay (days → score) ─────────────────────────────────────
 ACTIVITY_DECAY = {

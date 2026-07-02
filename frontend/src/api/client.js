@@ -61,6 +61,9 @@ export const getAnalytics = () =>
 export const getRuns = (limit = 50) =>
   api.get('/runs', { params: { limit } }).then(r => r.data);
 
+export const clearRuns = () =>
+  api.delete('/runs').then(r => r.data);
+
 export const getRunResults = (run_id) =>
   api.get(`/runs/${run_id}/results`).then(r => r.data);
 
@@ -86,5 +89,11 @@ export const analyzeJdFile = (file) => {
 
 export const searchCandidates = (q, limit = 50) =>
   api.get('/candidates/search', { params: { q, limit } }).then(r => r.data);
+
+export const getInterviewQuestions = (candidate_id, parsed_jd) =>
+  api.post(`/candidates/${candidate_id}/interview-questions`, { parsed_jd }).then(r => r.data);
+
+export const scanJdBias = (jd_text) =>
+  api.post('/jd/bias-scan', { jd_text }).then(r => r.data);
 
 export default api;

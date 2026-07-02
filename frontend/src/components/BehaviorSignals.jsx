@@ -1,5 +1,5 @@
 import React from 'react';
-import { Calendar, UserCheck, Flame, RefreshCw, Zap } from 'lucide-react';
+import { Calendar, UserCheck, Flame, RefreshCw, Zap, AlertTriangle } from 'lucide-react';
 import { normalizeScore } from '../utils/helpers';
 
 export default function BehaviorSignals({ candidate }) {
@@ -7,8 +7,9 @@ export default function BehaviorSignals({ candidate }) {
   const completeness = normalizeScore(candidate.profile_completeness || candidate.activity_score || 70);
   
   // Calculate relative recency rating
-  const lastActiveStr = candidate.last_active;
+  const lastActiveStr = candidate.last_active || "3 months ago";
   let activityRecency = 65; // default moderate
+  let isStale = false;
   if (lastActiveStr) {
     const dateLower = String(lastActiveStr).toLowerCase();
     if (dateLower.includes('today') || dateLower.includes('hour') || dateLower.includes('1 day ago') || dateLower.includes('2026-06')) {
@@ -16,9 +17,10 @@ export default function BehaviorSignals({ candidate }) {
     } else if (dateLower.includes('week') || dateLower.includes('2026-05')) {
       activityRecency = 75;
     } else if (dateLower.includes('month') || dateLower.includes('2026-04')) {
-      activityRecency = 50;
+      activityRecency = 45;
     } else {
-      activityRecency = 30;
+      activityRecency = 25;
+      isStale = true;
     }
   }
 
@@ -43,6 +45,16 @@ export default function BehaviorSignals({ candidate }) {
         </h4>
         <span className="text-[10px] text-slate-500 font-mono">Real-time telemetry</span>
       </div>
+      
+      {isStale && (
+        <div className="bg-orange-500/10 border border-orange-500/20 rounded-lg p-2.5 flex items-start gap-2 animate-pulse">
+          <AlertTriangle size={14} className="text-orange-400 flex-shrink-0 mt-0.5" />
+          <div>
+            <div className="text-xs font-semibold text-orange-400">Freshness Decay Warning</div>
+            <div className="text-[10px] text-slate-400">This candidate's profile hasn't been updated in &gt;90 days. Their behavioral signal score has been heavily penalized.</div>
+          </div>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {signals.map((sig, idx) => (

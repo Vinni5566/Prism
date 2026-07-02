@@ -1,4 +1,25 @@
-import React, { useEffect, useState, useCallback } from 'react'
+import React, { useEffect, useState, useCallback, useRef, Component } from 'react'
+
+// ── Error Boundary ─────────────────────────────────────────────────────────────
+class ErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { hasError: false, error: null }; }
+  static getDerivedStateFromError(error) { return { hasError: true, error }; }
+  componentDidCatch(error, info) { console.error('[Prism ErrorBoundary]', error, info); }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0a0f1e', color: '#e2e8f0', flexDirection: 'column', gap: '16px', padding: '32px', textAlign: 'center' }}>
+          <div style={{ fontSize: '48px' }}>⚠️</div>
+          <h2 style={{ fontSize: '20px', fontWeight: 'bold', margin: 0 }}>Something went wrong rendering this page</h2>
+          <p style={{ color: '#94a3b8', fontSize: '13px', maxWidth: '400px' }}>{this.state.error?.message || 'Unknown error'}</p>
+          <button onClick={() => { this.setState({ hasError: false, error: null }); window.location.reload(); }} style={{ padding: '10px 24px', background: '#14b8a6', border: 'none', borderRadius: '10px', color: 'white', cursor: 'pointer', fontWeight: 600 }}>Reload App</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+import { ClipboardList, Scale, Trophy } from 'lucide-react'
 import Sidebar from './components/Sidebar'
 import Header from './components/Header'
 import JDInput from './components/JDInput'
@@ -17,6 +38,7 @@ import LoginPage from './pages/auth/LoginPage'
 import RegisterPage from './pages/auth/RegisterPage'
 import CandidateHome from './pages/candidate/CandidateHome'
 import Integrations from './pages/Integrations'
+import AboutPage from './pages/AboutPage'
 import ProtectedRoute from './components/ProtectedRoute'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { getHealth, getStats, getCandidates, rankCandidates, getRunResults } from './api/client'
@@ -27,6 +49,7 @@ function MainApp() {
   const [backendStatus, setBackendStatus] = useState(null)
   const [stats, setStats] = useState(null)
   const [activePage, setActivePage] = useState('landing')
+  const resultsRef = useRef(null)
   const [loginRolePreset, setLoginRolePreset] = useState(null)
   const [jdText, setJdText] = useState('')
   const [parsedJd, setParsedJd] = useState(null)
@@ -69,17 +92,19 @@ function MainApp() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      if (user.role === 'candidate') {
-        setActivePage('candidate')
-      } else {
-        setActivePage('dashboard')
+      if (activePage === 'login' || activePage === 'register') {
+        if (user.role === 'candidate') {
+          setActivePage('candidate')
+        } else {
+          setActivePage('dashboard')
+        }
       }
     } else {
-      if (activePage !== 'login' && activePage !== 'register') {
+      if (activePage !== 'login' && activePage !== 'register' && activePage !== 'about') {
         setActivePage('landing')
       }
     }
-  }, [isAuthenticated, user])
+  }, [isAuthenticated, user, activePage])
 
   const handleJdChange = (val) => {
     setJdText(val)
@@ -156,6 +181,11 @@ function MainApp() {
         []
 
       setRequiredSkills(skills)
+
+      // Scroll down to show the ranked results directly on the dashboard
+      setTimeout(() => {
+        resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }, 150)
     } catch (e) {
       setError(e?.response?.data?.detail || e.message || 'Ranking failed')
     } finally {
@@ -189,27 +219,36 @@ function MainApp() {
   const navigateTo = (page, rolePreset = null) => {
     setActivePage(page)
     if (rolePreset) setLoginRolePreset(rolePreset)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 
-  if (!isAuthenticated) {
-    if (activePage === 'login') {
-      return (
-        <LoginPage
-          onBack={() => setActivePage('landing')}
-          onSuccess={() => {}}
-          defaultRole={loginRolePreset}
-        />
-      )
-    }
-    if (activePage === 'register') {
-      return (
-        <RegisterPage
-          onBack={() => setActivePage('login')}
-          onSuccess={() => {}}
-        />
-      )
-    }
-    return <LandingPage onNavigate={navigateTo} />
+  const handlePageChange = (page) => {
+    setActivePage(page)
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
+  if (activePage === 'login') {
+    return (
+      <LoginPage
+        onBack={() => setActivePage('landing')}
+        onSuccess={() => {}}
+        defaultRole={loginRolePreset}
+      />
+    )
+  }
+  if (activePage === 'register') {
+    return (
+      <RegisterPage
+        onBack={() => setActivePage('login')}
+        onSuccess={() => {}}
+      />
+    )
+  }
+  if (activePage === 'about') {
+    return <AboutPage onNavigate={navigateTo} isAuthenticated={isAuthenticated} user={user} />
+  }
+  if (activePage === 'landing' || (!isAuthenticated && activePage !== 'login' && activePage !== 'register' && activePage !== 'about')) {
+    return <LandingPage onNavigate={navigateTo} isAuthenticated={isAuthenticated} user={user} />
   }
 
   const showSidebar = isAuthenticated && user.role === 'recruiter';
@@ -217,7 +256,7 @@ function MainApp() {
   return (
     <div className="min-h-screen flex">
       {showSidebar && (
-        <Sidebar activePage={activePage} onPageChange={setActivePage} />
+        <Sidebar activePage={activePage} onPageChange={handlePageChange} onNavigate={navigateTo} />
       )}
 
       <div className="flex-1 flex flex-col min-w-0">
@@ -225,7 +264,7 @@ function MainApp() {
           backendStatus={backendStatus}
           stats={stats}
           activePage={activePage}
-          onPageChange={setActivePage}
+          onPageChange={handlePageChange}
         />
 
         {compareList.length >= 1 && (
@@ -301,135 +340,141 @@ function MainApp() {
             </ProtectedRoute>
           ) : (
             <ProtectedRoute allowedRoles={['recruiter']}>
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <section className="lg:col-span-1 space-y-6">
-                  <JDInput
-                    value={jdText}
-                    onChange={handleJdChange}
-                    onJdAnalyzed={handleJdAnalyzed}
-                    parsedJd={parsedJd}
-                    onClearParsedJd={() => setParsedJd(null)}
-                    onSubmit={handleAnalyze}
-                    isLoading={loading}
-                    disabled={backendStatus?.status !== 'ok'}
-                  />
-
-                  {parsedJd && !runId && (
-                    <button
-                      onClick={handleAnalyze}
-                      disabled={loading}
-                      className="btn-primary w-full py-3.5 text-sm flex items-center justify-center gap-2 hover:scale-102 transition-transform"
-                    >
-                      {loading ? (
-                        <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Ranking Pool…</>
-                      ) : (
-                        <>Rank Candidates Now</>
-                      )}
-                    </button>
-                  )}
-
-                  {runId && (
-                    <div className="glass rounded-xl p-4 flex items-center gap-3">
-                      <input
-                        type="checkbox"
-                        id="exclude-rejected"
-                        checked={excludeRejected}
-                        onChange={(e) => setExcludeRejected(e.target.checked)}
-                        className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-teal-500 focus:ring-teal-500/20"
-                      />
-                      <div>
-                        <label htmlFor="exclude-rejected" className="text-xs font-semibold text-slate-200 cursor-pointer">
-                          Exclude Rejected Candidates
-                        </label>
-                        <p className="text-[10px] text-slate-500">
-                          Do not show candidates marked 'Not a Fit' in subsequent runs.
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  <WeightSliders weights={weights} onChange={handleWeightsChange} />
-
-                  {runId && (
-                    <ExportButton runId={runId} disabled={!results.length} />
-                  )}
-
-                  {error && (
-                    <div className="glass rounded-xl p-4 text-red-400 text-sm">
-                      {error}
-                    </div>
-                  )}
-                </section>
-
-                <section className="lg:col-span-2 space-y-6">
-                  {loading && <LoadingPipeline />}
-
-                  {!loading && results.length === 0 && (
-                    <div className="space-y-4 animate-fadeIn">
+              <div className="space-y-6">
+                
+                {!loading && results.length === 0 && (
+                  <div className="space-y-4 animate-fadeIn">
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
                       {/* Welcome Banner */}
-                      <div className="glass rounded-3xl p-8 text-center relative overflow-hidden">
+                      <div className="glass rounded-2xl p-6 relative overflow-hidden flex items-center">
                         <div className="absolute inset-0 pointer-events-none">
-                          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-96 h-48 opacity-10 blur-3xl"
+                          <div className="absolute top-0 left-1/2 -translate-x-1/2 w-72 h-32 opacity-10 blur-3xl"
                                style={{ background: 'radial-gradient(circle, #14b8a6, transparent)' }} />
-                          <div className="absolute bottom-0 right-1/4 w-64 h-32 opacity-8 blur-3xl"
-                               style={{ background: 'radial-gradient(circle, #7c3aed, transparent)' }} />
                         </div>
-                        <div className="relative">
-                          <div className="w-16 h-16 rounded-2xl flex items-center justify-center mb-6 mx-auto">
-                            <img src="/logo.jpg" alt="Prism Logo" className="w-full h-full object-cover rounded-2xl" />
+                        <div className="relative flex items-center gap-5">
+                          <div className="w-12 h-12 rounded-xl flex-shrink-0 flex items-center justify-center">
+                            <img src="/logo.jpg" alt="Prism Logo" className="w-full h-full object-cover rounded-xl" />
                           </div>
-                          <h2 className="text-2xl font-black text-slate-100 mb-2">
-                            Rank Your <span className="gradient-text">Candidate Pool</span>
-                          </h2>
-                          <p className="text-slate-400 text-sm max-w-sm mx-auto leading-relaxed">
-                            Paste a job description on the left. Prism will analyze requirements, run semantic matching,
-                            and surface your top candidates with explainable scores.
-                          </p>
+                          <div>
+                            <h2 className="text-lg font-black text-slate-100">
+                              Rank Your <span className="gradient-text">Candidate Pool</span>
+                            </h2>
+                            <p className="text-slate-400 text-xs leading-relaxed mt-0.5">
+                              Paste a job description. Prism will analyze requirements, run semantic matching,
+                              and surface your top candidates with explainable scores.
+                            </p>
+                          </div>
                         </div>
                       </div>
 
                       {/* Quick-tip cards */}
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div className="grid grid-cols-3 gap-3">
                         {[
-                          { icon: '📋', step: '1', title: 'Paste JD', desc: 'Add a job description or upload a PDF — Prism parses it automatically.' },
-                          { icon: '⚖️', step: '2', title: 'Tune Weights', desc: 'Adjust the 5 scoring dimensions to match your hiring priorities.' },
-                          { icon: '🏆', step: '3', title: 'Get Rankings', desc: 'Ranked candidates appear instantly with AI explanations and skill breakdowns.' },
+                          { icon: <ClipboardList size={20} />, step: '1', title: 'Paste JD', desc: 'Add a JD or upload a PDF.' },
+                          { icon: <Scale size={20} />, step: '2', title: 'Tune Weights', desc: 'Adjust 5 scoring dimensions.' },
+                          { icon: <Trophy size={20} />, step: '3', title: 'Get Rankings', desc: 'Ranked with AI explanations.' },
                         ].map(tip => (
-                          <div key={tip.step} className="glass-hover rounded-2xl p-5 text-center">
-                            <div className="text-2xl mb-2">{tip.icon}</div>
-                            <div className="text-[10px] font-bold text-teal-400 uppercase tracking-wider mb-1">Step {tip.step}</div>
-                            <h4 className="text-sm font-bold text-slate-200 mb-1.5">{tip.title}</h4>
-                            <p className="text-[11px] text-slate-500 leading-relaxed">{tip.desc}</p>
+                          <div key={tip.step} className="glass rounded-xl p-3.5 text-center flex flex-col items-center justify-center">
+                            <div className="mb-1.5 text-teal-400">{tip.icon}</div>
+                            <div className="text-[9px] font-bold text-teal-400 uppercase tracking-wider mb-0.5">Step {tip.step}</div>
+                            <h4 className="text-xs font-bold text-slate-200 mb-0.5">{tip.title}</h4>
+                            <p className="text-[10px] text-slate-500 leading-snug">{tip.desc}</p>
                           </div>
                         ))}
                       </div>
-
-                      {stats && (
-                        <div className="glass rounded-2xl p-4 flex flex-wrap gap-6 justify-center">
-                          <div className="text-center">
-                            <div className="text-xl font-black font-mono gradient-text-teal">{stats.total_candidates?.toLocaleString() ?? '—'}</div>
-                            <div className="text-[10px] text-slate-500 uppercase tracking-wider">Candidates Indexed</div>
-                          </div>
-                          <div className="text-center">
-                            <div className="text-xl font-black font-mono text-purple-400">{stats.vectors_indexed?.toLocaleString() ?? '—'}</div>
-                            <div className="text-[10px] text-slate-500 uppercase tracking-wider">Vectors Ready</div>
-                          </div>
-                          <div className="text-center">
-                            <div className="text-xl font-black font-mono text-amber-400">5D</div>
-                            <div className="text-[10px] text-slate-500 uppercase tracking-wider">Scoring Dimensions</div>
-                          </div>
-                          <div className="text-center">
-                            <div className="text-xl font-black font-mono text-pink-400">&lt; 2s</div>
-                            <div className="text-[10px] text-slate-500 uppercase tracking-wider">Avg. Rank Time</div>
-                          </div>
-                        </div>
-                      )}
                     </div>
-                  )}
 
-                  {!loading && results.length > 0 && (
-                    <>
-                      <div className="flex items-center justify-between">
+                    {stats && (
+                      <div className="glass rounded-2xl p-4 flex flex-wrap gap-8 justify-center lg:justify-around">
+                        <div className="text-center">
+                          <div className="text-xl font-black font-mono gradient-text-teal">{stats.total_candidates?.toLocaleString() ?? '—'}</div>
+                          <div className="text-[10px] text-slate-500 uppercase tracking-wider">Candidates Indexed</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-xl font-black font-mono text-purple-400">{stats.vectors_indexed?.toLocaleString() ?? '—'}</div>
+                          <div className="text-[10px] text-slate-500 uppercase tracking-wider">Vectors Ready</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-xl font-black font-mono text-amber-400">5D</div>
+                          <div className="text-[10px] text-slate-500 uppercase tracking-wider">Scoring Dimensions</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-xl font-black font-mono text-pink-400">&lt; 2s</div>
+                          <div className="text-[10px] text-slate-500 uppercase tracking-wider">Avg. Rank Time</div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {error && (
+                  <div className="glass rounded-xl p-4 text-red-400 text-sm">
+                    {error}
+                  </div>
+                )}
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* Left Column: JD Input */}
+                  <div className="space-y-6 flex flex-col h-full">
+                    <div className="flex-1">
+                      <JDInput
+                        value={jdText}
+                        onChange={handleJdChange}
+                        onJdAnalyzed={handleJdAnalyzed}
+                        parsedJd={parsedJd}
+                        onClearParsedJd={() => setParsedJd(null)}
+                        onSubmit={handleAnalyze}
+                        isLoading={loading}
+                        disabled={false}
+                      />
+                    </div>
+                    {parsedJd && (
+                      <button
+                        type="button"
+                        onClick={handleAnalyze}
+                        disabled={loading}
+                        className="btn-primary w-full py-3.5 text-sm flex items-center justify-center gap-2 hover:scale-102 transition-transform disabled:opacity-60 disabled:cursor-not-allowed"
+                      >
+                        {loading ? (
+                          <><span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Ranking Pool…</>
+                        ) : (
+                          <>🎯 Rank Candidates Now</>
+                        )}
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Right Column: Weights */}
+                  <div className="space-y-6 flex flex-col h-full">
+                    <WeightSliders weights={weights} onChange={handleWeightsChange} />
+                    
+                    {runId && (
+                      <div className="glass rounded-xl p-4 flex items-center gap-3">
+                        <input
+                          type="checkbox"
+                          id="exclude-rejected"
+                          checked={excludeRejected}
+                          onChange={(e) => setExcludeRejected(e.target.checked)}
+                          className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-teal-500 focus:ring-teal-500/20"
+                        />
+                        <div>
+                          <label htmlFor="exclude-rejected" className="text-xs font-semibold text-slate-200 cursor-pointer">
+                            Exclude Rejected Candidates
+                          </label>
+                          <p className="text-[10px] text-slate-500">
+                            Do not show candidates marked 'Not a Fit' in subsequent runs.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {loading && <LoadingPipeline />}
+
+                {!loading && results.length > 0 && (
+                  <div className="space-y-6" ref={resultsRef}>
+                    <div className="flex items-center justify-between">
                         <div>
                           <h2 className="text-xl font-bold text-slate-100">
                             Ranked Shortlist
@@ -460,6 +505,7 @@ function MainApp() {
                             candidate={{ ...candidate, rank: index + 1 }}
                             rank={index + 1}
                             runId={runId}
+                            parsedJd={parsedJd}
                             onFeedbackGiven={handleFeedbackGiven}
                             isComparing={compareList.some(c => c.candidate_id === candidate.candidate_id)}
                             onToggleCompare={() => toggleCompare({ ...candidate, rank: index + 1 })}
@@ -467,9 +513,8 @@ function MainApp() {
                           />
                         ))}
                       </div>
-                    </>
+                    </div>
                   )}
-                </section>
               </div>
             </ProtectedRoute>
           )}
@@ -481,8 +526,10 @@ function MainApp() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <MainApp />
-    </AuthProvider>
+    <ErrorBoundary>
+      <AuthProvider>
+        <MainApp />
+      </AuthProvider>
+    </ErrorBoundary>
   )
 }

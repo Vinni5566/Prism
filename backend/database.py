@@ -402,6 +402,13 @@ def list_jd_runs(limit: int = 50) -> List[Dict]:
     return results
 
 
+def clear_all_runs():
+    """Delete all records from jd_runs and candidate_scores."""
+    with get_conn() as conn:
+        conn.execute("DELETE FROM jd_runs")
+        conn.execute("DELETE FROM candidate_scores")
+
+
 def get_analytics() -> Dict:
     """Aggregate pool-level analytics for the dashboard."""
     with get_conn() as conn:

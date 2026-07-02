@@ -171,8 +171,8 @@ export default function Integrations() {
       {/* Tab Switcher */}
       <div className="flex gap-2">
         {[
-          { id: 'stack', label: '🔬 Live AI Stack', count: TECH_STACK.length },
-          { id: 'planned', label: '🔗 Planned Integrations', count: INTEGRATIONS.length },
+          { id: 'stack', label: 'Live AI Stack', count: TECH_STACK.length },
+          { id: 'planned', label: 'Planned Integrations', count: INTEGRATIONS.length },
         ].map(tab => (
           <button
             key={tab.id}
@@ -290,7 +290,7 @@ export default function Integrations() {
 
             <div className="mt-6 glass rounded-2xl p-5 border border-white/5 text-center">
               <p className="text-xs text-slate-500">
-                🚀 All integrations are on the product roadmap. Current version is built for the
+                All integrations are on the product roadmap. Current version is built for the
                 <span className="text-amber-400 font-semibold"> Redrob Data & AI Challenge</span> — 
                 compatible with the official dataset & submission format.
               </p>
