@@ -216,15 +216,28 @@ def get_candidate(candidate_id: str) -> Optional[Dict]:
         ).fetchone()
     if not row:
         return None
-    return _deserialise(dict(row))
+    return _clean_floats(_deserialise(dict(row)))
 
+
+import math
+
+def _clean_floats(obj):
+    if isinstance(obj, float):
+        if math.isnan(obj) or math.isinf(obj):
+            return 0.0
+        return obj
+    elif isinstance(obj, dict):
+        return {k: _clean_floats(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [_clean_floats(v) for v in obj]
+    return obj
 
 def get_all_candidates(limit: int = 5000) -> List[Dict]:
     with get_conn() as conn:
         rows = conn.execute(
             "SELECT * FROM candidates LIMIT ?", (limit,)
         ).fetchall()
-    return [_deserialise(dict(r)) for r in rows]
+    return [_clean_floats(_deserialise(dict(r))) for r in rows]
 
 
 def count_candidates() -> int:
