@@ -59,6 +59,24 @@ def on_startup():
         print(f"[API] Error checking/seeding database: {e}")
 
 
+@app.post("/admin/seed")
+def manual_seed():
+    """
+    Manually trigger data seeding — use this after deployment if
+    /health shows 0 candidates (startup seeding can silently fail on cold boot).
+    """
+    try:
+        from seed import run_seeding
+        run_seeding()
+        return {
+            "status": "ok",
+            "candidates": count_candidates(),
+            "vectors": vcount(),
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # ── Pydantic request/response models ──────────────────────────────────────────
 
 class WeightsModel(BaseModel):
