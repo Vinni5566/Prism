@@ -63,4 +63,9 @@ CORS_ORIGINS = [
     "http://127.0.0.1:3002",
     "http://localhost:5173",
     "http://127.0.0.1:5173",
+    # Production — Vercel deployment
+    "https://prism-three-orcin.vercel.app",
+    "https://prism-three-orcin-vinni5566.vercel.app",
+    # Allow any *.vercel.app subdomain (preview deployments)
+    "https://*.vercel.app",
 ]
